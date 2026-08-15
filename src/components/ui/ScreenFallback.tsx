@@ -1,9 +1,7 @@
-import './screen-fallback.css'
-
 export function ScreenFallback() {
   return (
-    <div className="screen-fallback" role="status">
-      <span className="screen-fallback__label">Loading</span>
+    <div className="flex min-h-[var(--touch-min)] items-center justify-center py-4" role="status">
+      <span className="text-sm text-muted-foreground">Loading</span>
     </div>
   )
 }

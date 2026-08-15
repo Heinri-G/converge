@@ -3,8 +3,10 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import { registerSW } from 'virtual:pwa-register'
 import App from './app/App'
+import { initTheme } from './lib/theme'
 import './styles/globals.css'
 
+initTheme()
 registerSW({ immediate: true })
 
 const rootEl = document.getElementById('root')

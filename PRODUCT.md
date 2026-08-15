@@ -8,7 +8,7 @@ web
 
 ## Stack
 
-Vite + React SPA (user-confirmed), responsive web app installable as a PWA; no deploy target specified. Backend is Supabase (Auth, Postgres with row-level security, Edge Functions for scraping/sentiment). Sentiment extraction is LLM-based, executed server-side. Full technical map: ARCHITECTURE.md.
+Vite + React SPA (user-confirmed), responsive web app installable as a PWA; no deploy target specified. Backend is Supabase (Auth, Postgres with row-level security, Edge Functions for scraping/sentiment). Sentiment extraction is LLM-based, executed server-side. Full technical map: ARCHITECTURE.md. UI styling: Tailwind CSS v4 + shadcn/ui (user-confirmed adoption); visual world defined in DESIGN.md.
 
 ## Users
 

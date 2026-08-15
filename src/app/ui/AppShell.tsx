@@ -1,103 +1,82 @@
 import { NavLink } from 'react-router-dom'
 import type { ReactNode } from 'react'
-import './app-shell.css'
+import { History, House, Search } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 interface NavItem {
   to: string
   label: string
-  icon: ReactNode
+  icon: typeof House
+  end: boolean
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { to: '/', label: 'Home', icon: <HomeIcon /> },
-  { to: '/research', label: 'Research', icon: <ResearchIcon /> },
-  { to: '/history', label: 'History', icon: <HistoryIcon /> },
+  { to: '/', label: 'Home', icon: House, end: true },
+  { to: '/research', label: 'Research', icon: Search, end: false },
+  { to: '/history', label: 'History', icon: History, end: false },
 ]
+
+function navLinkClasses(isActive: boolean, mobile: boolean) {
+  return cn(
+    'flex items-center gap-2 rounded-md font-semibold text-muted-foreground transition-colors',
+    mobile
+      ? 'flex-1 flex-col justify-center gap-0.5 text-[11px]'
+      : 'px-3 py-2 text-sm',
+    isActive
+      ? 'bg-accent text-accent-foreground'
+      : 'hover:bg-muted hover:text-foreground',
+  )
+}
 
 export function AppShell({ children }: { children: ReactNode }) {
   return (
-    <div className="app-shell">
-      <header className="app-header">
-        <p className="app-header__title">Converge</p>
+    <div className="grid h-dvh grid-rows-[auto_1fr_auto] lg:grid-cols-[var(--side-nav-w)_1fr] lg:grid-rows-1">
+      <header className="flex items-center gap-3 border-b border-border bg-background px-4 pt-[calc(var(--safe-top)+12px)] pb-3 lg:hidden">
+        <span aria-hidden="true" className="size-2.5 rounded-[2px] bg-gold" />
+        <p className="m-0 text-lg font-semibold tracking-tight">Converge</p>
       </header>
-      <main className="app-main">
-        <div className="app-main__inner">{children}</div>
+
+      <main className="overflow-y-auto px-4 pt-4 lg:col-start-2 lg:row-start-1 lg:px-6 lg:pt-6">
+        {children}
       </main>
-      <nav className="bottom-nav" aria-label="Primary">
+
+      <nav
+        aria-label="Primary"
+        className="flex gap-1 border-t border-border bg-background px-2 pt-1 pb-[calc(var(--safe-bottom)+4px)] lg:hidden"
+      >
         {NAV_ITEMS.map((item) => (
-          <NavLink key={item.to} to={item.to} end={item.to === '/'} className="bottom-nav__link">
-            {item.icon}
+          <NavLink
+            key={item.to}
+            to={item.to}
+            end={item.end}
+            className={({ isActive }) => navLinkClasses(isActive, true)}
+          >
+            <item.icon aria-hidden="true" className="size-5" strokeWidth={1.75} />
             <span>{item.label}</span>
           </NavLink>
         ))}
       </nav>
-      <nav className="side-nav" aria-label="Primary">
-        <p className="side-nav__brand">Converge</p>
+
+      <nav
+        aria-label="Primary"
+        className="hidden flex-col gap-1 border-r border-border bg-background p-4 pt-[calc(var(--safe-top)+16px)] lg:col-start-1 lg:row-start-1 lg:flex"
+      >
+        <p className="mb-4 flex items-center gap-2.5 text-lg font-semibold tracking-tight">
+          <span aria-hidden="true" className="size-2.5 rounded-[2px] bg-gold" />
+          Converge
+        </p>
         {NAV_ITEMS.map((item) => (
-          <NavLink key={item.to} to={item.to} end={item.to === '/'} className="side-nav__link">
-            {item.icon}
+          <NavLink
+            key={item.to}
+            to={item.to}
+            end={item.end}
+            className={({ isActive }) => navLinkClasses(isActive, false)}
+          >
+            <item.icon aria-hidden="true" className="size-4.5" strokeWidth={1.75} />
             <span>{item.label}</span>
           </NavLink>
         ))}
       </nav>
     </div>
-  )
-}
-
-function HomeIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      width="22"
-      height="22"
-      aria-hidden="true"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M3 10.5 12 3l9 7.5" />
-      <path d="M5 9.5V21h14V9.5" />
-    </svg>
-  )
-}
-
-function ResearchIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      width="22"
-      height="22"
-      aria-hidden="true"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <circle cx="11" cy="11" r="7" />
-      <path d="m20 20-3.5-3.5" />
-    </svg>
-  )
-}
-
-function HistoryIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      width="22"
-      height="22"
-      aria-hidden="true"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M3 12a9 9 0 1 0 2.6-6.3L3 8" />
-      <path d="M3 3v5h5" />
-      <path d="M12 7v5l3 2" />
-    </svg>
   )
 }
