@@ -64,6 +64,37 @@ export interface ReportDraft {
   anti_picks: AntiPick[]
 }
 
+export interface ShareRow {
+  id: string
+  report_id: string
+  share_type: 'public_link' | 'user'
+  granted_to: string | null
+  created_at: string
+  revoked_at: string | null
+}
+
+export interface ShareDraft {
+  reportId: string
+  shareType: 'public_link' | 'user'
+  tokenHash?: string
+  grantedTo?: string
+}
+
+export interface SharedReportPayload {
+  report: ReportDraft
+  candidates: CandidateDraft[]
+  analysis: Record<string, AnalysisDraft | null>
+}
+
+export interface SessionSummary {
+  id: string
+  domain_slug: string
+  title: string
+  resolution: SessionResolution
+  updated_at: string
+  stage_state: Record<string, unknown>
+}
+
 export type Tier = 'capsule' | 'manual_filter' | 'entry_espresso' | 'prosumer'
 
 export interface DomainBranch {

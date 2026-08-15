@@ -15,7 +15,7 @@ References: ARCHITECTURE.md (pillar flow 5, data model + RLS, open decisions), A
 - **Reopen vs refine:** "Open" shows the saved report; "Refine" starts a **new session** pre-seeded with the prior domain + gate answers (incremental re-research, no re-answering). "Run again" clones the gate state for a fresh pull.
 - Mobile-first: the share sheet is a bottom sheet on phones; the share route is a read-only report view.
 
-## Step 1 — `shares` table (migration `0005_shares`)
+## Step 1 — `shares` table (migration `0007_shares`)
 
 ```sql
 create table public.shares (
@@ -170,3 +170,16 @@ Client never receives a raw `token_hash` (owner share list shows created/revoked
 
 - Open (ARCHITECTURE.md): exact sharing UX copy, whether public links should expire (`revoked_at` supports it), email-based user resolution UX.
 - Everything in `00`–`07` is now in place; a new domain only needs `03`-style seed content, and a new source/LLM/geo provider only touches the `04` adapter boundaries.
+
+## Implementation notes (built)
+
+- **Migration `0007_shares.sql`** (sequential numbering, not the spec's illustrative `0005`): `shares` with the share-type invariant check; owner CRUD via report→session join; grantee select; **T3 read policies** on `reports`/`candidates`/`analysis` (owner OR live user grant); partial-unique `token_hash` index; `revoked_at` honored everywhere.
+- **`api` schema + config.toml:** `supabase/config.toml` now exposes `["public", "graphql_public", "api"]`. Two SECURITY DEFINER functions, both `set search_path`, both revoked from PUBLIC:
+  - `api.get_shared_report(p_token)` — the only anon path to a report; compares `sha256(token)` to `shares.token_hash`; raises `share_not_found` for invalid/revoked; returns `{ report, candidates, analysis }` as JSONB.
+  - `api.resolve_user_id_by_email(p_email)` — resolves `auth.users` by email for the grant UI; authenticated-only.
+- **Sharing logic (`src/features/reports/share.ts`):** `createPublicLink` (token = `crypto.randomUUID()`, only `sha256Hex(token)` persisted, returns `/r/<token>`), `grantUser` (resolve email → `user` share), `revokeShare`, `listSharesForReport`. Client never receives a raw `token_hash`.
+- **History (`HistoryScreen`):** authed users list `research_sessions` (`updated_at desc`) with domain + resolution badges (Complete / Fast Track / In progress). Per-row actions: **Open report** (finished rows → `/report?session=`), **Continue** (in-progress rows → `/research?session=`), **Refine**, **Run again**. Guests see a local-draft card (from `offline.ts`) plus the sign-in upsell.
+- **Reopen/refine/run-again:** `createClonedSession(prior, resolution)` clones `domain_slug` + `stage_state` (prior answers preserved). Refine clones as `in_progress` only for in-progress priors (resumes the gate at the unanswered question) and as `complete` for finished priors (skips re-answering, straight to the pull); Run again clones as `complete`. GateWizard gained a **signed-in resume path** (`?session=` → loads the row, delegates to the shared `resumeSnapshot` used by guests).
+- **Guest promotion adoption (`promote.ts`):** now upserts the guest's candidates under the new session, re-links analysis by `source_url`, synthesizes + `saveReport`s, and only clears the guest record when the whole block succeeds (failures keep the guest data for retry; candidate/report upserts stay idempotent via `session_id` uniques).
+- **Shared read-only view (`/r/:token`):** calls `get_shared_report` and renders the same `TopThree` / `ComparisonMatrix` / `AntiPicks` surfaces with a "Read only" badge and no save/share/edit affordances. Invalid/revoked tokens land on the "This report isn't available" state.
+- **Not verified live (backend not applied here):** RLS cross-account probes, end-to-end public-link open, user-grant grantee reads, and sign-in adoption against the real DB — these need the migration applied (`0007_shares.sql` + `config.toml` `api` schema) and will be probed in the batch verification round.

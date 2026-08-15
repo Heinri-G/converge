@@ -15,6 +15,7 @@ import { synthesize } from './engine'
 import { ComparisonMatrix } from './ComparisonMatrix'
 import { TopThree } from './TopThree'
 import { AntiPicks } from './AntiPicks'
+import { ShareSheet } from '@/features/reports/ShareSheet'
 
 interface GuestAnalysisItem {
   candidateId: string
@@ -77,6 +78,7 @@ type LoadState = 'loading' | 'ready' | 'error'
 
 interface LoadedReport {
   report: ReportDraft
+  reportId: string | null
   saved: boolean
 }
 
@@ -86,6 +88,8 @@ export default function ReportScreen() {
 
   const [loadState, setLoadState] = useState<LoadState>('loading')
   const [report, setReport] = useState<ReportDraft | null>(null)
+  const [reportId, setReportId] = useState<string | null>(null)
+  const [shareOpen, setShareOpen] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -98,10 +102,12 @@ export default function ReportScreen() {
         if (!active) return
         if (!loaded) {
           setReport(null)
+          setReportId(null)
           setLoadState('ready')
           return
         }
         setReport(loaded.report)
+        setReportId(loaded.reportId)
         setSaved(loaded.saved)
         setLoadState('ready')
       } catch (loadError) {
@@ -233,11 +239,25 @@ export default function ReportScreen() {
                 <Link to="/research">Start a new research</Link>
               </Button>
             )}
+            {reportId && (
+              <Button
+                type="button"
+                variant="outline"
+                className="min-h-11"
+                onClick={() => setShareOpen(true)}
+              >
+                Share
+              </Button>
+            )}
             <Button asChild variant="outline" className="min-h-11">
               <Link to="/">Home</Link>
             </Button>
           </div>
         </>
+      )}
+
+      {reportId && (
+        <ShareSheet reportId={reportId} open={shareOpen} onOpenChange={setShareOpen} />
       )}
     </section>
   )
@@ -253,12 +273,15 @@ async function loadGuestReport(): Promise<LoadedReport | null> {
   const analysis = toAnalysisRecord(guest.analysis ?? [])
   const tier = guest.tier ?? 'entry_espresso'
   const report = synthesize({ title: formatTitle(guest.session.domain_slug), tier }, candidates, analysis)
-  return { report, saved: false }
+  return { report, reportId: null, saved: false }
 }
 
 async function loadSignedInReport(sessionId: string): Promise<LoadedReport | null> {
   const existing = await loadReport(sessionId)
-  if (existing) return { report: existing, saved: true }
+  if (existing) {
+    const { reportId, ...report } = existing
+    return { report, reportId, saved: true }
+  }
 
   const session = await loadResearchSession(sessionId)
   const candidates = await loadSessionCandidates(sessionId)
@@ -271,6 +294,6 @@ async function loadSignedInReport(sessionId: string): Promise<LoadedReport | nul
     candidates,
     analyses,
   )
-  await saveReport(sessionId, report)
-  return { report, saved: true }
+  const savedReport = await saveReport(sessionId, report)
+  return { report, reportId: savedReport.id, saved: true }
 }

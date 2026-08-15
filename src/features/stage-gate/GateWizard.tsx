@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useEffectEvent, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { updateSessionResolution } from '@/lib/db'
+import { updateSessionResolution, loadResearchSession } from '@/lib/db'
 import { clearGuestSession, readGuestSession, saveGuestSession } from '@/lib/offline'
 import { deriveResearchIntent, type ResearchIntent } from '@/lib/research-intent'
 import type { DomainBranch, GateState, SessionResolution } from '@/lib/types'
@@ -131,15 +131,10 @@ export function GateWizard({
     }
   }
 
-  const resumeGuestSession = useEffectEvent(async () => {
-    if (sessionId || initialPrompt) return
-
-    const guest = await readGuestSession()
-    const snapshot = guest?.session.stage_state
-    if (!isGateState(snapshot)) return
-
+  async function resumeSnapshot(snapshot: GateState, resolution: SessionResolution) {
     const normalizedSnapshot = clampGateState(snapshot)
-    if (normalizedSnapshot.fastTracked || guest?.session.resolution === 'fast_tracked') {
+
+    if (normalizedSnapshot.fastTracked || resolution === 'fast_tracked') {
       setSelectedDomain(normalizedSnapshot.domainSlug)
       setGateState({ ...normalizedSnapshot, fastTracked: true })
       setComplete(true)
@@ -157,7 +152,7 @@ export function GateWizard({
     setBranches(loadedBranches)
     setGateState(normalizedSnapshot)
 
-    if (guest?.session.resolution === 'complete') {
+    if (resolution === 'complete') {
       setComplete(true)
       setQuestion(null)
       setQuestionState('ready')
@@ -176,6 +171,23 @@ export function GateWizard({
       setComplete(true)
       setMobileOpen(false)
     }
+  }
+
+  const resumeGuestSession = useEffectEvent(async () => {
+    if (sessionId || initialPrompt) return
+
+    const guest = await readGuestSession()
+    const snapshot = guest?.session.stage_state
+    if (!isGateState(snapshot)) return
+
+    await resumeSnapshot(snapshot, guest!.session.resolution)
+  })
+
+  const resumeSignedInSession = useEffectEvent(async (id: string) => {
+    const session = await loadResearchSession(id)
+    if (!isGateState(session.stage_state)) return
+
+    await resumeSnapshot(session.stage_state, session.resolution)
   })
 
   useEffect(() => {
@@ -186,7 +198,9 @@ export function GateWizard({
         if (!active) return
         setDomains(availableDomains)
         setCatalogState('ready')
-        if (initialPrompt && fastTrack) {
+        if (sessionId) {
+          void resumeSignedInSession(sessionId).catch(() => undefined)
+        } else if (initialPrompt && fastTrack) {
           selectPromptDomain()
         } else {
           void resumeGuestSession().catch(() => undefined)
@@ -194,7 +208,10 @@ export function GateWizard({
       })
       .catch(() => {
         if (!active) return
-        if (initialPrompt) {
+        if (sessionId) {
+          setCatalogState('error')
+          setError('Your saved session could not be reached. Check your connection and try again.')
+        } else if (initialPrompt) {
           setDomains([])
           setCatalogState('ready')
           if (fastTrack) selectPromptDomain()
@@ -209,7 +226,7 @@ export function GateWizard({
     return () => {
       active = false
     }
-  }, [fastTrack, initialPrompt, selectPromptDomain])
+  }, [fastTrack, initialPrompt, selectPromptDomain, sessionId])
 
   async function selectDomain(domainSlug: string) {
     setIntent((current) => deriveResearchIntent(current.topic, domainSlug))

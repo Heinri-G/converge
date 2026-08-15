@@ -6,6 +6,10 @@ import type {
   ResearchSession,
   SessionDraft,
   SessionResolution,
+  SessionSummary,
+  SharedReportPayload,
+  ShareDraft,
+  ShareRow,
 } from './types'
 
 export async function createSession(
@@ -131,10 +135,10 @@ export async function saveReport(
   return data
 }
 
-export async function loadReport(sessionId: string): Promise<ReportDraft | null> {
+export async function loadReport(sessionId: string): Promise<(ReportDraft & { reportId: string }) | null> {
   const { data, error } = await supabase
     .from('reports')
-    .select('title, matrix, top_3, anti_picks')
+    .select('id, title, matrix, top_3, anti_picks')
     .eq('session_id', sessionId)
     .maybeSingle()
 
@@ -142,6 +146,7 @@ export async function loadReport(sessionId: string): Promise<ReportDraft | null>
   if (!data) return null
 
   return {
+    reportId: data.id,
     title: data.title ?? '',
     matrix: (data.matrix ?? []) as ReportDraft['matrix'],
     top_3: (data.top_3 ?? []) as ReportDraft['top_3'],
@@ -235,4 +240,131 @@ export async function loadSessionAnalyses(
     }
   }
   return byId
+}
+
+export async function listSessions(): Promise<SessionSummary[]> {
+  const { data, error } = await supabase
+    .from('research_sessions')
+    .select('id, domain_slug, title, resolution, updated_at, stage_state')
+    .order('updated_at', { ascending: false })
+
+  if (error) throw error
+
+  return ((data ?? []) as SessionSummary[]).map((row) => ({
+    ...row,
+    stage_state: (row.stage_state ?? {}) as Record<string, unknown>,
+  }))
+}
+
+export async function createClonedSession(
+  priorSessionId: string,
+  resolution: SessionResolution,
+): Promise<ResearchSession> {
+  const prior = await loadResearchSession(priorSessionId)
+  const { data, error } = await supabase
+    .from('research_sessions')
+    .insert({
+      owner_id: prior.owner_id,
+      domain_slug: prior.domain_slug,
+      title: prior.title,
+      resolution,
+      stage_state: prior.stage_state,
+    })
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+export async function insertShare(draft: ShareDraft): Promise<ShareRow> {
+  const { data, error } = await supabase
+    .from('shares')
+    .insert({
+      report_id: draft.reportId,
+      share_type: draft.shareType,
+      token_hash: draft.tokenHash ?? null,
+      granted_to: draft.grantedTo ?? null,
+    })
+    .select()
+    .single()
+
+  if (error) throw error
+  return data as ShareRow
+}
+
+export async function listShares(reportId: string): Promise<ShareRow[]> {
+  const { data, error } = await supabase
+    .from('shares')
+    .select('id, report_id, share_type, granted_to, created_at, revoked_at')
+    .eq('report_id', reportId)
+
+  if (error) throw error
+  return (data ?? []) as ShareRow[]
+}
+
+export async function revokeShare(shareId: string): Promise<void> {
+  const { error } = await supabase
+    .from('shares')
+    .update({ revoked_at: new Date().toISOString() })
+    .eq('id', shareId)
+
+  if (error) throw error
+}
+
+export async function resolveUserByEmail(email: string): Promise<string> {
+  const { data, error } = await supabase.rpc('resolve_user_id_by_email', { p_email: email })
+  if (error) throw error
+  if (!data) throw new Error('No account matches that email.')
+  return data as string
+}
+
+interface SharedReportRow {
+  id: string
+  session_id: string
+  title: string
+  matrix: unknown
+  top_3: unknown
+  anti_picks: unknown
+  created_at: string
+}
+
+export async function getSharedReport(token: string): Promise<SharedReportPayload> {
+  const { data, error } = await supabase.rpc('get_shared_report', { p_token: token })
+
+  if (error) {
+    if (error.message.includes('share_not_found')) {
+      throw new Error('This report is no longer available.')
+    }
+    throw error
+  }
+
+  const payload = data as {
+    report: SharedReportRow
+    candidates: CandidateRow[]
+    analysis: AnalysisRow[]
+  }
+
+  const analysisById: Record<string, AnalysisDraft | null> = {}
+  for (const row of payload.analysis ?? []) {
+    analysisById[row.candidate_id] = {
+      sentimentScore: row.sentiment_score,
+      pros: row.pros ?? [],
+      cons: row.cons ?? [],
+      defects: row.defects ?? [],
+      sourceSummary: row.source_summary ?? '',
+      model: row.model ?? '',
+    }
+  }
+
+  return {
+    report: {
+      title: payload.report?.title ?? '',
+      matrix: (payload.report?.matrix ?? []) as ReportDraft['matrix'],
+      top_3: (payload.report?.top_3 ?? []) as ReportDraft['top_3'],
+      anti_picks: (payload.report?.anti_picks ?? []) as ReportDraft['anti_picks'],
+    },
+    candidates: (payload.candidates ?? []).map(mapCandidateRow),
+    analysis: analysisById,
+  }
 }
