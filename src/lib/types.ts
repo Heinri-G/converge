@@ -24,3 +24,40 @@ export interface GuestSessionRecord {
   candidates: unknown[]
   analysis: unknown[]
 }
+
+export type Tier = 'capsule' | 'manual_filter' | 'entry_espresso' | 'prosumer'
+
+export interface DomainBranch {
+  id: string
+  parentId: string | null
+  domainSlug: string
+  slug: string
+  tier: Tier
+  label: string
+  description: string
+  ordering: number
+}
+
+export interface GateOption {
+  value: string
+  label: string
+}
+
+export interface GateQuestion {
+  id: string
+  branchId: string
+  prompt: string
+  tooltip: string
+  answerType: 'single' | 'boolean'
+  options: GateOption[]
+  weight: number
+  ordering: number
+}
+
+export type GateAnswer = string | boolean
+
+export interface GateState extends Record<string, unknown> {
+  domainSlug: string
+  branchPath: string[]
+  answers: Record<string, GateAnswer>
+}

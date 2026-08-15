@@ -13,3 +13,18 @@ export async function createSession(
   if (error) throw error
   return data
 }
+
+export async function updateSessionStageState(
+  sessionId: string,
+  stageState: Record<string, unknown>,
+): Promise<ResearchSession> {
+  const { data, error } = await supabase
+    .from('research_sessions')
+    .update({ stage_state: stageState })
+    .eq('id', sessionId)
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
+}
