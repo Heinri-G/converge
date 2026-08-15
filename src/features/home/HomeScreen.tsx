@@ -1,7 +1,10 @@
 import { Input } from '@/components/ui/input'
+import type { FormEvent } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
+import { Link, useNavigate } from 'react-router-dom'
+import { useState } from 'react'
 
 interface Crease {
   id: string
@@ -29,6 +32,15 @@ const creaseGlyph = {
 } as const
 
 export default function HomeScreen() {
+  const navigate = useNavigate()
+  const [prompt, setPrompt] = useState('')
+
+  function deploy(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!prompt.trim()) return
+    navigate(`/research?prompt=${encodeURIComponent(prompt.trim())}`)
+  }
+
   return (
     <div className="flex flex-col gap-7">
       <div>
@@ -43,21 +55,35 @@ export default function HomeScreen() {
         </p>
       </div>
 
-      <form className="flex flex-col gap-3">
+      <form className="flex flex-col gap-3" onSubmit={deploy}>
         <Input
           aria-label="What are you choosing?"
           placeholder="Best espresso machine under $600"
           className="h-11"
+          value={prompt}
+          onChange={(event) => setPrompt(event.target.value)}
         />
         <div className="flex gap-3">
           <Button type="submit" size="lg" className="flex-1">
             Deploy research
           </Button>
-          <Button type="button" variant="ghost" className="text-muted-foreground">
+          <Button
+            type="button"
+            variant="ghost"
+            className="text-muted-foreground"
+            onClick={() => {
+              if (prompt.trim())
+                navigate(`/research?prompt=${encodeURIComponent(prompt.trim())}&fastTrack=1`)
+            }}
+          >
             Fast Track
           </Button>
         </div>
       </form>
+
+      <Button asChild variant="outline" className="min-h-11 w-full">
+        <Link to="/demo">See a completed example</Link>
+      </Button>
 
       <div>
         <div className="flex items-center gap-2.5">
@@ -74,9 +100,7 @@ export default function HomeScreen() {
                 size="sm"
                 className={cn(
                   'flex-row items-center gap-3 py-0 ring-1',
-                  item.crease === 'avoid'
-                    ? 'ring-avoid/30'
-                    : 'ring-foreground/8',
+                  item.crease === 'avoid' ? 'ring-avoid/30' : 'ring-foreground/8',
                 )}
               >
                 <span className="px-3.5 font-mono text-[10px] text-muted-foreground">
@@ -84,9 +108,7 @@ export default function HomeScreen() {
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{item.name}</p>
-                  <p className="font-mono text-[11px] text-muted-foreground">
-                    {item.meta}
-                  </p>
+                  <p className="font-mono text-[11px] text-muted-foreground">{item.meta}</p>
                 </div>
                 <span
                   className={cn(

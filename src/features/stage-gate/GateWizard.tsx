@@ -1,16 +1,21 @@
-import { useEffect, useEffectEvent, useState } from 'react'
+import { useCallback, useEffect, useEffectEvent, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { updateSessionStageState } from '@/lib/db'
 import { clearGuestSession, readGuestSession, saveGuestSession } from '@/lib/offline'
+import { deriveResearchIntent, type ResearchIntent } from '@/lib/research-intent'
 import type { DomainBranch, GateState } from '@/lib/types'
+import { ResearchRun } from '@/features/research/ResearchRun'
 import { fetchDomainBranches, fetchDomainSlugs, fetchGateQuestions } from './api'
+import { createFallbackGate } from './fallback'
 import { MAX_DEPTH, isAtMaxDepth, isComplete, nextBranch } from './flow'
 import { QuestionSheet } from './QuestionSheet'
 
 interface GateWizardProps {
   sessionId?: string
   onComplete?: (state: GateState) => void
+  initialPrompt?: string
+  fastTrack?: boolean
 }
 
 type LoadState = 'loading' | 'ready' | 'error'
@@ -57,7 +62,15 @@ function isGateState(value: unknown): value is GateState {
   )
 }
 
-export function GateWizard({ sessionId, onComplete }: GateWizardProps) {
+export function GateWizard({
+  sessionId,
+  onComplete,
+  initialPrompt,
+  fastTrack = false,
+}: GateWizardProps) {
+  const [intent, setIntent] = useState<ResearchIntent>(() =>
+    deriveResearchIntent(initialPrompt ?? 'Coffee and espresso at home'),
+  )
   const [catalogState, setCatalogState] = useState<LoadState>('loading')
   const [domains, setDomains] = useState<string[]>([])
   const [selectedDomain, setSelectedDomain] = useState<string | null>(null)
@@ -72,6 +85,21 @@ export function GateWizard({ sessionId, onComplete }: GateWizardProps) {
   const [complete, setComplete] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const selectPromptDomain = useCallback(() => {
+    const fallback = createFallbackGate(intent)
+    const nextState = fastTrack
+      ? { ...fallback.state, branchPath: [fallback.state.branchPath[0]!, fallback.branches[1]!.id] }
+      : fallback.state
+    setSelectedDomain(intent.domain)
+    setBranches(fallback.branches)
+    setActiveBranchId(fallback.branches[0]?.id ?? null)
+    setGateState(nextState)
+    setQuestion(fastTrack ? null : fallback.question)
+    setQuestionState('ready')
+    setComplete(fastTrack)
+    setMobileOpen(!fastTrack)
+  }, [fastTrack, intent])
+
   async function loadDomains() {
     setCatalogState('loading')
     setError(null)
@@ -81,15 +109,21 @@ export function GateWizard({ sessionId, onComplete }: GateWizardProps) {
       setDomains(availableDomains)
       setCatalogState('ready')
     } catch {
-      setCatalogState('error')
-      setError(
-        'The domain catalog could not be reached. Check the database migration, then try again.',
-      )
+      if (initialPrompt) {
+        setDomains([])
+        setCatalogState('ready')
+        if (fastTrack) selectPromptDomain()
+      } else {
+        setCatalogState('error')
+        setError(
+          'The domain catalog could not be reached. Check the database migration, then try again.',
+        )
+      }
     }
   }
 
   const resumeGuestSession = useEffectEvent(async () => {
-    if (sessionId) return
+    if (sessionId || initialPrompt) return
 
     const guest = await readGuestSession()
     const snapshot = guest?.session.stage_state
@@ -123,22 +157,33 @@ export function GateWizard({ sessionId, onComplete }: GateWizardProps) {
         if (!active) return
         setDomains(availableDomains)
         setCatalogState('ready')
-        void resumeGuestSession().catch(() => undefined)
+        if (initialPrompt && fastTrack) {
+          selectPromptDomain()
+        } else {
+          void resumeGuestSession().catch(() => undefined)
+        }
       })
       .catch(() => {
         if (!active) return
-        setCatalogState('error')
-        setError(
-          'The domain catalog could not be reached. Check the database migration, then try again.',
-        )
+        if (initialPrompt) {
+          setDomains([])
+          setCatalogState('ready')
+          if (fastTrack) selectPromptDomain()
+        } else {
+          setCatalogState('error')
+          setError(
+            'The domain catalog could not be reached. Check the database migration, then try again.',
+          )
+        }
       })
 
     return () => {
       active = false
     }
-  }, [])
+  }, [fastTrack, initialPrompt, selectPromptDomain])
 
   async function selectDomain(domainSlug: string) {
+    setIntent((current) => deriveResearchIntent(current.topic, domainSlug))
     setSelectedDomain(domainSlug)
     setQuestionState('loading')
     setError(null)
@@ -151,12 +196,19 @@ export function GateWizard({ sessionId, onComplete }: GateWizardProps) {
       if (!root) throw new Error('Domain has no root branch')
 
       const rootQuestions = await fetchGateQuestions(root.id)
+      const fastTrackBranch = loadedBranches[1] ?? root
       setBranches(loadedBranches)
-      setActiveBranchId(root.id)
-      setGateState({ domainSlug, branchPath: [], answers: {} })
-      setQuestion(rootQuestions[0] ?? null)
-      setQuestionState(rootQuestions.length > 0 ? 'ready' : 'error')
-      if (rootQuestions.length === 0) {
+      setActiveBranchId(fastTrack ? fastTrackBranch.id : root.id)
+      setGateState(
+        fastTrack
+          ? { domainSlug, branchPath: [root.id, fastTrackBranch.id], answers: {} }
+          : { domainSlug, branchPath: [], answers: {} },
+      )
+      setQuestion(fastTrack ? null : (rootQuestions[0] ?? null))
+      setComplete(fastTrack)
+      setMobileOpen(!fastTrack)
+      setQuestionState(fastTrack || rootQuestions.length > 0 ? 'ready' : 'error')
+      if (!fastTrack && rootQuestions.length === 0) {
         setError('This domain has no gate questions yet.')
       }
     } catch {
@@ -279,6 +331,26 @@ export function GateWizard({ sessionId, onComplete }: GateWizardProps) {
             </p>
           </div>
           <div className="grid gap-2 sm:grid-cols-2">
+            {initialPrompt && !domains.includes(intent.domain) && (
+              <Button
+                type="button"
+                variant="default"
+                className="h-auto min-h-16 justify-between whitespace-normal px-4 py-3 text-left sm:col-span-2"
+                onClick={selectPromptDomain}
+              >
+                <span>
+                  <span className="block font-medium">
+                    Use a {formatDomainSlug(intent.domain)} map
+                  </span>
+                  <span className="mt-1 block text-sm font-normal text-primary-foreground/75">
+                    Generated from your request: {intent.topic}
+                  </span>
+                </span>
+                <span aria-hidden="true" className="font-mono text-xs">
+                  →
+                </span>
+              </Button>
+            )}
             {domains.map((domain) => (
               <Button
                 key={domain}
@@ -360,36 +432,11 @@ export function GateWizard({ sessionId, onComplete }: GateWizardProps) {
         )}
 
       {complete && gateState && (
-        <Card className="border border-border py-0 shadow-none">
-          <CardContent className="space-y-6 px-5 py-6">
-            <div className="space-y-2">
-              <p className="font-mono text-[10px] tracking-[0.18em] text-primary uppercase">
-                Map ready
-              </p>
-              <h2 className="text-xl leading-tight font-semibold tracking-tight">
-                A useful fold is ready for {formatDomainSlug(selectedDomain ?? '')}.
-              </h2>
-              <p className="text-sm leading-5 text-muted-foreground">
-                The next research step can use this narrowed path instead of restarting from the
-                whole domain.
-              </p>
-            </div>
-            <div className="border-t border-border pt-4">
-              <p className="font-mono text-[10px] tracking-[0.18em] text-muted-foreground uppercase">
-                Selected tier
-              </p>
-              <p className="mt-2 text-base font-medium">
-                {mappedBranch?.label ?? 'Starting point'}
-              </p>
-              <p className="mt-1 text-sm leading-5 text-muted-foreground">
-                {mappedBranch?.description ?? 'Your answers are saved with this guest session.'}
-              </p>
-            </div>
-            <Button type="button" variant="outline" className="min-h-11" onClick={resetDomain}>
-              Map another path
-            </Button>
-          </CardContent>
-        </Card>
+        <ResearchRun
+          domainSlug={selectedDomain ?? gateState.domainSlug}
+          tier={mappedBranch?.tier ?? 'capsule'}
+          intent={{ ...intent, domain: selectedDomain ?? intent.domain }}
+        />
       )}
     </section>
   )

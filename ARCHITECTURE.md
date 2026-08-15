@@ -22,7 +22,7 @@ Reference for building features. PRODUCT.md is the product source of truth; this
 Segments a topic into tiers (Capsule → Manual Filter → Entry Espresso → Prosumer) and surfaces 2–3 high-impact branching questions with ℹ️ tooltips.
 
 - **Content, not code:** tiers, branches, questions, and tooltips live in `domain_branches` / `gate_questions` content tables (seeded), not in JSX. New domains ship as seed data with no deploy.
-- The client-side flow controller renders a branch's questions from the gate tables; each answer moves the session down one branch level (hard cap below).
+- The client-side flow controller renders a branch's questions from the gate tables; a normalized `ResearchIntent` supplies the objective and hard constraints. Unknown domains use a per-session fallback gate until a generated gate is promoted into catalog content.
 
 ### 2. Anti-rabbit-hole controls
 

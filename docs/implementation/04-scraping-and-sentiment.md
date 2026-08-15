@@ -9,9 +9,12 @@ References: ARCHITECTURE.md (pillar flow 3, Edge Functions, open decisions), AGE
 
 - **Edge Functions are stateless executors.** `scrape-and-analyze` returns normalized `{ candidates, analysis }`; the client persists rows (RLS-guarded). The function never writes the DB and never uses `service_role`.
 - **Adapter interfaces, vendor open** (per ARCHITECTURE.md): `SourceAdapter` (per scrape source), `GeoAdapter` (drive-time), `SentimentAdapter` (LLM). Only the function's env secrets name concrete providers — nothing in the bundle.
-- Keys live in function secrets: `SCRAPE_GEO_API_KEY`, `LLM_API_KEY`, `LLM_MODEL`. Never `VITE_*`.
+- LLM keys live in function secrets: `LLM_API_KEY`, `LLM_MODEL`. Geo services may use public/self-hosted URLs; any paid provider key remains server-only. Never use `VITE_*`.
 - Scraped text is **untrusted**: stored as text, rendered escaped; no `dangerouslySetInnerHTML` (AGENTS.md).
 - Server-side validation is authoritative: the function rejects malformed/bounded-violating input before any scraping.
+- **Cost-aware path:** the completed demo uses local synthetic fixtures; development geo can use cached, rate-limited Nominatim + OSRM requests without a paid key, but those public endpoints are not a production SLA.
+- **Source discipline:** the first live source set should prefer user-provided URLs and official/free APIs; broad arbitrary crawling is deferred until each source has a ToS and rate-limit review.
+- **Token discipline:** geocode, deduplicate, and radius-filter before LLM analysis; send bounded excerpts and analyze only the final candidate cap. The demo makes zero LLM calls.
 
 ## Step 1 — Tables (migration `0003_candidates_analysis`)
 
@@ -54,8 +57,9 @@ Indexes: `candidates(session_id)`; `analysis(candidate_id)` (PK already covers).
 type RequestBody = {
   query: string            // from the gate: root query or tier-narrowed query
   domainSlug: string
-  geo: { address?: string; lat?: number; lng?: number }
-  radiusMinutes: number    // drive-time radius cap
+  intent: ResearchIntent   // objective + hard constraints + preferences
+  geo?: { address?: string; lat?: number; lng?: number }
+  radiusMinutes?: number    // optional drive-time radius cap
   tier: 'broad' | Tier     // 'broad' = root-tier pull (05 fast-track uses this)
   maxResults: number
 }
@@ -66,7 +70,7 @@ Response: `{ candidates: CandidateDraft[], analysis: Record<string, AnalysisDraf
 **Pipeline, in order:**
 
 1. **Validate (authoritative).** Required fields, types; `query.trim()` length 2–200; `radiusMinutes` 1–120; `maxResults` 1–50; `geo` needs `address` or `{lat,lng}`. Reject 400 with a machine-readable error. **No URL/path built from user input** (OWASP).
-2. **Geocode + drive-time** via `GeoAdapter.resolve(address)` then `GeoAdapter.driveMinutes(from, to)`. Adapter interface:
+2. **Optional geocode + drive-time** via `GeoAdapter.resolve(address)` then `GeoAdapter.driveMinutes(from, to)`. Non-geographic research skips routing. Adapter interface:
 
    ```ts
    interface GeoAdapter {
@@ -88,7 +92,7 @@ Response: `{ candidates: CandidateDraft[], analysis: Record<string, AnalysisDraf
 5. **Sentiment** via `SentimentAdapter.analyze(listing, context)` → `AnalysisDraft`. Prompt contract (provider-agnostic): given the scraped review/comment text for one candidate, return **strict JSON**: `{ sentimentScore: -1..1, pros: string[], cons: string[], defects: string[], summary: string }`. `defects` must capture **recurring** defect mentions ("multiple owners report X"). Parse defensively; on parse failure return a `null` analysis for that candidate (don't fail the batch).
 6. **Return** `{ candidates, analysis }`. Do not persist.
 
-Env: `LLM_API_KEY`, `LLM_MODEL`, `SCRAPE_GEO_API_KEY`. Function is **not** created with `--no-verify-jwt`; callers pass the Supabase JWT (guest or signed-in — either is fine; the function is a compute endpoint, authorization is the client's RLS).
+Env: `LLM_API_KEY`, `LLM_MODEL`, plus any provider-specific source or routing configuration. Function is **not** created with `--no-verify-jwt`; callers pass the Supabase JWT. Guest remote execution remains an auth decision; the local demo requires neither auth nor providers.
 
 ## Step 3 — Client: invocation + progress + persist
 
