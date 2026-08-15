@@ -22,6 +22,15 @@ References: ARCHITECTURE.md (Supabase data model + RLS, Edge Function convention
    - commit → `supabase db pull <descriptive-name> --local --yes`
    - verify → `supabase migration list --local`
 
+> **Remote-only variant (this repo, no Docker).** There is no local stack on the dev
+> machine (no Docker), so schema changes ship as hand-authored migration files created
+> with `supabase migration new <name>`, applied by the user in the Dashboard SQL Editor
+> (one block per file, in order), and verified with the matching probe in
+> `supabase/verification/`. Imperative-migration principles still hold: never `apply_migration`
+> to iterate; RLS on every exposed table; explicit `grant ... to anon, authenticated` per table
+> (new projects no longer auto-expose tables to the Data API); run the Dashboard Security
+> Advisor before considering schema work done.
+
 ## Step 2 — Shared plumbing (one migration: `0001_foundation`)
 
 ```sql
