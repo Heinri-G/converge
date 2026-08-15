@@ -19,6 +19,7 @@ interface QuestionSheetProps {
   mobileOpen: boolean
   onMobileOpenChange: (open: boolean) => void
   onAnswer: (answer: GateAnswer) => void
+  onFastTrack: () => void
 }
 
 function AnswerButtons({ question, onAnswer }: Pick<QuestionSheetProps, 'question' | 'onAnswer'>) {
@@ -68,7 +69,7 @@ function QuestionContent({
   branchPathLength,
   maxDepth,
   onAnswer,
-}: Omit<QuestionSheetProps, 'mobileOpen' | 'onMobileOpenChange'>) {
+}: Omit<QuestionSheetProps, 'mobileOpen' | 'onMobileOpenChange' | 'onFastTrack'>) {
   return (
     <>
       <Progress
@@ -96,6 +97,25 @@ function QuestionContent({
   )
 }
 
+function FastTrackRow({ onFastTrack }: { onFastTrack: () => void }) {
+  return (
+    <div className="space-y-2">
+      <Button
+        type="button"
+        variant="ghost"
+        className="min-h-12 w-full border border-border text-muted-foreground hover:text-foreground"
+        onClick={onFastTrack}
+      >
+        Fast Track — good enough, show top options
+      </Button>
+      <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
+        <p>You can jump to results anytime.</p>
+        <Tooltip text="Skips the remaining questions and jumps to the broad domain pull." />
+      </div>
+    </div>
+  )
+}
+
 export function QuestionSheet({
   question,
   branch,
@@ -104,6 +124,7 @@ export function QuestionSheet({
   mobileOpen,
   onMobileOpenChange,
   onAnswer,
+  onFastTrack,
 }: QuestionSheetProps) {
   return (
     <>
@@ -121,6 +142,7 @@ export function QuestionSheet({
               maxDepth={maxDepth}
               onAnswer={onAnswer}
             />
+            <FastTrackRow onFastTrack={onFastTrack} />
           </CardContent>
         </Card>
       </div>
@@ -141,15 +163,15 @@ export function QuestionSheet({
             side="bottom"
             showCloseButton
             overlayClassName="md:hidden"
-            className="max-h-[calc(100dvh-4.5rem)] gap-0 overflow-y-auto rounded-t-xl border-border bg-card px-4 pb-[calc(var(--safe-bottom)+1rem)] pt-5 md:hidden"
+            className="max-h-[calc(100dvh-4.5rem)] flex-col gap-0 overflow-hidden rounded-t-xl border-border bg-card px-0 pt-0 pb-0 md:hidden"
           >
-            <SheetHeader className="px-0 pb-5 pr-12">
+            <SheetHeader className="shrink-0 gap-1 px-4 pt-5 pr-12 pb-4">
               <SheetTitle>Adaptive mapping</SheetTitle>
               <SheetDescription>
                 One answer folds the research toward a useful tier.
               </SheetDescription>
             </SheetHeader>
-            <div className="space-y-6">
+            <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-4 pb-6">
               <QuestionContent
                 question={question}
                 branch={branch}
@@ -157,6 +179,9 @@ export function QuestionSheet({
                 maxDepth={maxDepth}
                 onAnswer={onAnswer}
               />
+            </div>
+            <div className="shrink-0 border-t border-border px-4 pt-3 pb-[calc(var(--safe-bottom)+1rem)]">
+              <FastTrackRow onFastTrack={onFastTrack} />
             </div>
           </SheetContent>
         </Sheet>

@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useEffectEvent, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { updateSessionStageState } from '@/lib/db'
+import { updateSessionResolution } from '@/lib/db'
 import { clearGuestSession, readGuestSession, saveGuestSession } from '@/lib/offline'
 import { deriveResearchIntent, type ResearchIntent } from '@/lib/research-intent'
-import type { DomainBranch, GateState } from '@/lib/types'
+import type { DomainBranch, GateState, SessionResolution } from '@/lib/types'
 import { ResearchRun } from '@/features/research/ResearchRun'
 import { fetchDomainBranches, fetchDomainSlugs, fetchGateQuestions } from './api'
 import { createFallbackGate } from './fallback'
-import { MAX_DEPTH, isAtMaxDepth, isComplete, nextBranch } from './flow'
+import { clampGateState, MAX_DEPTH, isAtMaxDepth, isComplete, nextBranch } from './flow'
+import { createFastTrackedState } from './fastTrack'
 import { QuestionSheet } from './QuestionSheet'
 
 interface GateWizardProps {
@@ -27,7 +28,11 @@ function formatDomainSlug(slug: string): string {
     .join(' ')
 }
 
-async function persistGuestState(domainSlug: string, state: GateState) {
+async function persistGuestState(
+  domainSlug: string,
+  state: GateState,
+  resolution: SessionResolution,
+) {
   const current = await readGuestSession()
   await saveGuestSession(
     current ?? {
@@ -35,7 +40,7 @@ async function persistGuestState(domainSlug: string, state: GateState) {
       session: {
         domain_slug: domainSlug,
         title: '',
-        resolution: 'in_progress',
+        resolution,
         stage_state: state,
       },
       candidates: [],
@@ -46,7 +51,7 @@ async function persistGuestState(domainSlug: string, state: GateState) {
   if (current) {
     await saveGuestSession({
       ...current,
-      session: { ...current.session, stage_state: state },
+      session: { ...current.session, resolution, stage_state: state },
     })
   }
 }
@@ -88,7 +93,11 @@ export function GateWizard({
   const selectPromptDomain = useCallback(() => {
     const fallback = createFallbackGate(intent)
     const nextState = fastTrack
-      ? { ...fallback.state, branchPath: [fallback.state.branchPath[0]!, fallback.branches[1]!.id] }
+      ? {
+          ...fallback.state,
+          branchPath: [fallback.state.branchPath[0]!, fallback.branches[1]!.id],
+          fastTracked: true,
+        }
       : fallback.state
     setSelectedDomain(intent.domain)
     setBranches(fallback.branches)
@@ -129,21 +138,41 @@ export function GateWizard({
     const snapshot = guest?.session.stage_state
     if (!isGateState(snapshot)) return
 
-    const loadedBranches = await fetchDomainBranches(snapshot.domainSlug)
+    const normalizedSnapshot = clampGateState(snapshot)
+    if (normalizedSnapshot.fastTracked || guest?.session.resolution === 'fast_tracked') {
+      setSelectedDomain(normalizedSnapshot.domainSlug)
+      setGateState({ ...normalizedSnapshot, fastTracked: true })
+      setComplete(true)
+      setQuestion(null)
+      setQuestionState('ready')
+      setMobileOpen(false)
+      return
+    }
+
+    const loadedBranches = await fetchDomainBranches(normalizedSnapshot.domainSlug)
     const root = loadedBranches.find((branch) => branch.parentId === null)
     if (!root) return
 
-    const currentBranchId = snapshot.branchPath.at(-1) ?? root.id
+    setSelectedDomain(normalizedSnapshot.domainSlug)
+    setBranches(loadedBranches)
+    setGateState(normalizedSnapshot)
+
+    if (guest?.session.resolution === 'complete') {
+      setComplete(true)
+      setQuestion(null)
+      setQuestionState('ready')
+      setMobileOpen(false)
+      return
+    }
+
+    const currentBranchId = normalizedSnapshot.branchPath.at(-1) ?? root.id
     const currentQuestions = await fetchGateQuestions(currentBranchId)
 
-    setSelectedDomain(snapshot.domainSlug)
-    setBranches(loadedBranches)
     setActiveBranchId(currentBranchId)
-    setGateState(snapshot)
     setQuestion(currentQuestions[0] ?? null)
     setQuestionState('ready')
 
-    if (isComplete(snapshot) || currentQuestions.length === 0) {
+    if (isComplete(normalizedSnapshot) || currentQuestions.length === 0) {
       setComplete(true)
       setMobileOpen(false)
     }
@@ -201,7 +230,7 @@ export function GateWizard({
       setActiveBranchId(fastTrack ? fastTrackBranch.id : root.id)
       setGateState(
         fastTrack
-          ? { domainSlug, branchPath: [root.id, fastTrackBranch.id], answers: {} }
+          ? { domainSlug, branchPath: [root.id, fastTrackBranch.id], answers: {}, fastTracked: true }
           : { domainSlug, branchPath: [], answers: {} },
       )
       setQuestion(fastTrack ? null : (rootQuestions[0] ?? null))
@@ -217,13 +246,33 @@ export function GateWizard({
     }
   }
 
-  async function saveState(nextState: GateState) {
+  async function saveState(
+    nextState: GateState,
+    resolution: SessionResolution = 'in_progress',
+  ) {
     if (sessionId) {
-      await updateSessionStageState(sessionId, nextState)
+      await updateSessionResolution(sessionId, resolution, nextState)
       return
     }
 
-    await persistGuestState(nextState.domainSlug, nextState)
+    await persistGuestState(nextState.domainSlug, nextState, resolution)
+  }
+
+  async function fastTrackGate() {
+    if (!gateState) return
+    const nextState = createFastTrackedState(gateState)
+    try {
+      await saveState(nextState, 'fast_tracked')
+      setGateState(nextState)
+      setQuestion(null)
+      setComplete(true)
+      setQuestionState('ready')
+      setMobileOpen(false)
+      onComplete?.(nextState)
+    } catch {
+      setQuestionState('error')
+      setError('Fast Track could not be saved. Try again.')
+    }
   }
 
   async function answerQuestion(answer: string | boolean) {
@@ -234,29 +283,30 @@ export function GateWizard({
     const nextState = nextBranch(gateState, question, answer)
 
     try {
-      await saveState(nextState)
+      await saveState(nextState, 'in_progress')
       setGateState(nextState)
 
       const nextBranchId = nextState.branchPath.at(-1)
-      if (isAtMaxDepth(nextState) || !nextBranchId || nextBranchId === activeBranchId) {
-        setQuestion(null)
-        setComplete(true)
-        setQuestionState('ready')
-        setMobileOpen(false)
-        onComplete?.(nextState)
-        return
+      const descendsToNext =
+        Boolean(nextBranchId) && nextBranchId !== activeBranchId && !isAtMaxDepth(nextState)
+
+      if (descendsToNext && nextBranchId) {
+        const nextQuestions = await fetchGateQuestions(nextBranchId)
+        setActiveBranchId(nextBranchId)
+        const nextQuestion = nextQuestions[0]
+        if (nextQuestion) {
+          setQuestion(nextQuestion)
+          setQuestionState('ready')
+          return
+        }
       }
 
-      const nextQuestions = await fetchGateQuestions(nextBranchId)
-      setActiveBranchId(nextBranchId)
-      setQuestion(nextQuestions[0] ?? null)
+      await saveState(nextState, 'complete')
+      setQuestion(null)
+      setComplete(true)
       setQuestionState('ready')
-
-      if (nextQuestions.length === 0) {
-        setComplete(true)
-        setMobileOpen(false)
-        onComplete?.(nextState)
-      }
+      setMobileOpen(false)
+      onComplete?.(nextState)
     } catch {
       setQuestionState('error')
       setError('Your answer could not be saved. Try again.')
@@ -428,13 +478,14 @@ export function GateWizard({
             mobileOpen={mobileOpen}
             onMobileOpenChange={setMobileOpen}
             onAnswer={(answer) => void answerQuestion(answer)}
+            onFastTrack={() => void fastTrackGate()}
           />
         )}
 
       {complete && gateState && (
         <ResearchRun
           domainSlug={selectedDomain ?? gateState.domainSlug}
-          tier={mappedBranch?.tier ?? 'capsule'}
+          tier={gateState.fastTracked ? 'broad' : mappedBranch?.tier ?? 'capsule'}
           intent={{ ...intent, domain: selectedDomain ?? intent.domain }}
         />
       )}

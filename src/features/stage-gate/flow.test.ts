@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { GateQuestion, GateState } from '@/lib/types'
-import { isAtMaxDepth, isComplete, MAX_DEPTH, nextBranch } from './flow'
+import { clampGateState, isAtMaxDepth, isComplete, MAX_DEPTH, nextBranch } from './flow'
+import { createFastTrackedState } from './fastTrack'
 
 const question: GateQuestion = {
   id: 'question-1',
@@ -43,5 +44,21 @@ describe('stage gate flow controller', () => {
   it('does not call an empty state complete', () => {
     expect(isAtMaxDepth(initialState)).toBe(false)
     expect(isComplete(initialState)).toBe(false)
+  })
+
+  it('truncates an over-deep resumed state defensively', () => {
+    const deepState = { ...initialState, branchPath: ['root', 'one', 'two', 'three'] }
+
+    expect(clampGateState(deepState).branchPath).toEqual(['root', 'one'])
+  })
+
+  it('marks fast track without adding another branch level', () => {
+    const fastTracked = createFastTrackedState({
+      ...initialState,
+      branchPath: ['root', 'child'],
+    })
+
+    expect(fastTracked.fastTracked).toBe(true)
+    expect(fastTracked.branchPath).toEqual(['root', 'child'])
   })
 })

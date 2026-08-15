@@ -66,11 +66,20 @@ Behavior contract:
 - `fast_tracked` → route directly to results with the candidate/analysis data.
 - Depth-truncate any over-deep `stage_state` on load (defensive).
 
+## Implementation notes (built)
+
+- **Controller (`flow.ts`):** `clampGateState` truncates `branchPath` to `MAX_DEPTH`; `nextBranch` clamps before recording (defensive resume), so a path never exceeds 2 levels. `isAtMaxDepth`/`isComplete` unchanged from `03`; completion of the *wizard* is driven by question availability, not the cap alone (see below).
+- **`fastTrack.ts`:** `createFastTrackedState(state)` = `clampGateState(state)` + `fastTracked: true` — no new branch level.
+- **Wizard completion / resolution semantics:** a run is `complete` only when there is no next question to ask — i.e. the answer stayed on the current branch, the answer would descend past the cap, or the descended-to branch has no `gate_questions`. Reaching the depth cap alone is **not** complete (the depth-2 branch may still own a question, e.g. `coffee-espresso` `entry_espresso`). `answerQuestion` persists `in_progress` after each answer, then `complete` once the gate finishes; Fast Track persists `fast_tracked`.
+- **Resume (`resumeGuestSession`)** uses `resolution` as the source of truth: `fast_tracked` → straight to the broad `ResearchRun` (gate never re-entered); `complete` → straight to the mapped-tier `ResearchRun`; `in_progress` → restore at the exact unanswered question. Over-deep `stage_state` is clamped on load.
+- **UI wiring (`QuestionSheet.tsx`):** Fast Track renders as a `FastTrackRow` — full-width 48px button with an ℹ tooltip ("jumps to the broad domain pull"). On phones it is a **pinned footer** at the bottom of the bottom sheet (thumb-reachable, safe-area padded) while the question scrolls above; on `min-width: md` it docks at the bottom of the inline card.
+- **Fast Track landing:** the current build lands on the broad `ResearchRun` form (tier `broad`, no branch narrowing) rather than auto-invoking `scrape-and-analyze` — the function is not yet deployed and provider-neutral. The retry path is the Run form itself; persistence is idempotent (`resolution` re-save + `source_url` guard from `04`).
+
 ## Verification
 
 1. `vitest run src/features/stage-gate` — clamp tests + fast-track state tests.
 2. Playwright at **390px**: start a gate, tap Fast Track from step 1 → lands on results (broad candidates) in one tap, no dialog; at **1440px**: same, button docks in-card.
-3. Resume: an `in_progress` session returns to the exact unanswered question; a `fast_tracked` session skips the gate entirely.
+3. Resume: an `in_progress` session returns to the exact unanswered question; a `fast_tracked` session skips the gate entirely; a `complete` session never re-asks its last question.
 4. Seed a temporary depth-4 branch → UI never renders a third level.
 5. `npm run lint && npm run typecheck`; impeccable detector once.
 

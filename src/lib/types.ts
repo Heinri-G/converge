@@ -62,6 +62,7 @@ export interface GateState extends Record<string, unknown> {
   domainSlug: string
   branchPath: string[]
   answers: Record<string, GateAnswer>
+  fastTracked?: boolean
 }
 
 export type ResearchTier = 'broad' | Tier

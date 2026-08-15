@@ -1,5 +1,11 @@
 import { supabase } from './supabase'
-import type { AnalysisDraft, CandidateDraft, ResearchSession, SessionDraft } from './types'
+import type {
+  AnalysisDraft,
+  CandidateDraft,
+  ResearchSession,
+  SessionDraft,
+  SessionResolution,
+} from './types'
 
 export async function createSession(
   ownerId: string,
@@ -21,6 +27,22 @@ export async function updateSessionStageState(
   const { data, error } = await supabase
     .from('research_sessions')
     .update({ stage_state: stageState })
+    .eq('id', sessionId)
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+export async function updateSessionResolution(
+  sessionId: string,
+  resolution: SessionResolution,
+  stageState: Record<string, unknown>,
+): Promise<ResearchSession> {
+  const { data, error } = await supabase
+    .from('research_sessions')
+    .update({ resolution, stage_state: stageState })
     .eq('id', sessionId)
     .select()
     .single()
