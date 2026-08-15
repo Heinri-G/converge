@@ -1,0 +1,40 @@
+:root {
+  /* Breakpoints — referenced literally in @media (min-width: ...) queries */
+  --breakpoint-md: 640px;
+  --breakpoint-lg: 1024px;
+
+  /* Spacing scale (4px base) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+
+  /* Touch */
+  --touch-min: 44px;
+
+  /* Safe-area insets (notch / home indicator) */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+
+  /* Viewport */
+  --viewport-h: 100dvh;
+
+  /* Layout */
+  --side-nav-w: 240px;
+
+  /* Structural color placeholders — the visual world may replace these */
+  --color-bg: #ffffff;
+  --color-bg-muted: #f3f4f6;
+  --color-text: #111827;
+  --color-text-muted: #6b7280;
+  --color-border: #e5e7eb;
+  --color-focus: #111827;
+
+  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
