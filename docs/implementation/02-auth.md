@@ -7,7 +7,7 @@ References: PRODUCT.md (Capabilities, Operating Context), ARCHITECTURE.md (Auth 
 
 ## Decisions locked in
 
-- **Auth: Supabase Auth** — email magic link + OAuth providers (configure the provider list in Supabase dashboard; keep the client provider list in one config object).
+- **Auth: Supabase Auth** — email/password is the primary account flow; magic link remains available as a secondary passwordless option. OAuth is deferred until the core research flow is stable.
 - **Guest mode is default.** No account needed to research; a guest session lives entirely client-side in IndexedDB (see `lib/offline.ts` below). The server sees nothing until "Save to account."
 - **Signed-in = cloud source of truth.** RLS ownership (`01` template T1/T2) governs all rows.
 - **Session storage:** `supabase-js` with `flowType: 'pkce'` and persistent session in `localStorage`. **Recorded trade-off:** this exposes tokens to XSS; AGENTS.md prefers HttpOnly cookies. The hardened path (cookie-based session via `@supabase/ssr`/auth Edge Function) is a recorded follow-up, not a blocker — mitigations: restrictive CSP, no `dangerouslySetInnerHTML`, escaped scraped content. Recheck against current Supabase docs at implementation time.
@@ -72,8 +72,9 @@ export async function promoteGuestSession(user: User): Promise<Session | null> {
 ## Step 4 — Sign-in UI (mobile-first)
 
 `src/features/auth/SignInScreen.tsx`:
-- Email field (≥16px input) + "Send magic link" button; success state explains "Check your email."
-- OAuth buttons (Google, GitHub …) from the provider config; each ≥44px tall, full-width.
+- Email + password fields (≥16px inputs) with sign-in and account-creation modes.
+- Password recovery uses Supabase's reset email and update flow.
+- "Use a magic link instead" remains a subtle alternate action; success state explains "Check your email."
 - On phones the screen is a bottom-anchored card (thumb reach); on `min-width: lg` it centers.
 - Guest entry: prominent "Continue without account" that starts a guest session.
 
@@ -86,16 +87,19 @@ Shell wiring: route guards are not used at this stage — every surface works fo
 
 ## Verification
 
-1. Magic-link + OAuth sign-in and sign-out work on mobile and desktop viewports.
-2. Guest: research state persists across reload (IndexedDB), and **zero rows** exist server-side (`select count(*) from research_sessions` before promotion).
-3. Promote: session row appears with `owner_id` = the signed-in user; another account's RLS probe sees 0 rows (template T1 holds).
-4. Sign out and back in: history from `01` remains.
-5. `npm run typecheck` clean.
+1. Email/password sign-in, account creation, password recovery, and sign-out work on mobile and desktop viewports.
+2. Magic-link sign-in works as the alternate passwordless path.
+3. Guest: research state persists across reload (IndexedDB), and **zero rows** exist server-side (`select count(*) from research_sessions` before promotion).
+4. Promote: session row appears with `owner_id` = the signed-in user; another account's RLS probe sees 0 rows (template T1 holds).
+5. Sign out and back in: history from `01` remains.
+6. `npm run typecheck` clean.
 
 ## Acceptance checklist
 
 - [ ] Guest can run a full session with no account; nothing on the server until promotion
-- [ ] Magic link + at least one OAuth provider work
+- [ ] Email/password sign-in and account creation work
+- [ ] Password recovery works
+- [ ] Magic link works as the alternate passwordless path
 - [ ] Promotion re-inserts the session tree under the authenticated user and clears guest data
 - [ ] RLS: cross-account reads impossible; sign-out/in keeps history
 - [ ] Session-storage trade-off documented; CSP present; no secrets in the bundle

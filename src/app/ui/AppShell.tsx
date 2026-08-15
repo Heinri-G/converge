@@ -1,6 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import { History, House, Search } from 'lucide-react'
+import { AccountControl } from '@/features/auth/AccountControl'
 import { cn } from '@/lib/utils'
 
 interface NavItem {
@@ -31,12 +32,15 @@ function navLinkClasses(isActive: boolean, mobile: boolean) {
 export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="grid h-dvh grid-rows-[auto_1fr_auto] lg:grid-cols-[var(--side-nav-w)_1fr] lg:grid-rows-1">
-      <header className="flex items-center gap-3 border-b border-border bg-background px-4 pt-[calc(var(--safe-top)+12px)] pb-3 lg:hidden">
-        <span aria-hidden="true" className="size-2.5 rounded-[2px] bg-gold" />
-        <p className="m-0 text-lg font-semibold tracking-tight">Converge</p>
+      <header className="flex items-center justify-between gap-3 border-b border-border bg-background px-4 pt-[calc(var(--safe-top)+12px)] pb-3 lg:hidden">
+        <span className="flex items-center gap-2.5">
+          <span aria-hidden="true" className="size-2.5 rounded-[2px] bg-gold" />
+          <p className="m-0 text-lg font-semibold tracking-tight">Converge</p>
+        </span>
+        <AccountControl />
       </header>
 
-      <main className="overflow-y-auto px-4 pt-4 lg:col-start-2 lg:row-start-1 lg:px-6 lg:pt-6">
+      <main className="min-h-0 overflow-y-auto px-4 pt-4 lg:col-start-2 lg:row-start-1 lg:px-6 lg:pt-6">
         {children}
       </main>
 
@@ -76,6 +80,9 @@ export function AppShell({ children }: { children: ReactNode }) {
             <span>{item.label}</span>
           </NavLink>
         ))}
+        <div className="mt-auto">
+          <AccountControl fullWidth />
+        </div>
       </nav>
     </div>
   )
