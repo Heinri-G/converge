@@ -25,6 +25,43 @@ export interface GuestSessionRecord {
   session: SessionDraft
   candidates: unknown[]
   analysis: unknown[]
+  tier?: ResearchTier
+}
+
+export interface MatrixRow {
+  candidateId: string
+  name: string
+  sourceUrl: string
+  tier: ResearchTier
+  driveMinutes: number | null
+  rating: number | null
+  sentimentScore: number | null
+  priceBand: 'low' | 'mid' | 'high' | null
+  prosCount: number
+  consCount: number
+  defectsCount: number
+  compositeScore: number | null
+}
+
+export interface RankedOption {
+  candidateId: string
+  name: string
+  reason: string
+  rank: number
+}
+
+export interface AntiPick {
+  candidateId: string
+  name: string
+  reason: string
+  redFlag: 'defects' | 'overhyped'
+}
+
+export interface ReportDraft {
+  title: string
+  matrix: MatrixRow[]
+  top_3: RankedOption[]
+  anti_picks: AntiPick[]
 }
 
 export type Tier = 'capsule' | 'manual_filter' | 'entry_espresso' | 'prosumer'

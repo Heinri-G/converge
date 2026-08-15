@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import type { FormEvent } from 'react'
+import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -248,6 +249,11 @@ export function ResearchRun({ domainSlug, tier, intent, sessionId }: ResearchRun
               })
             )}
           </CardContent>
+          <div className="border-t border-border px-5 py-4">
+            <Button asChild className="min-h-11 w-full">
+              <Link to="/report">See the full report</Link>
+            </Button>
+          </div>
         </Card>
       )}
     </div>

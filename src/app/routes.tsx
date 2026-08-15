@@ -8,6 +8,7 @@ const ResearchScreen = lazy(() => import('../features/research/ResearchScreen'))
 const HistoryScreen = lazy(() => import('../features/history/HistoryScreen'))
 const SignInScreen = lazy(() => import('../features/auth/SignInScreen'))
 const DemoScreen = lazy(() => import('../features/demo/DemoScreen'))
+const ReportScreen = lazy(() => import('../features/synthesis/ReportScreen'))
 
 const routes: RouteObject[] = [
   { path: '/', element: <HomeScreen /> },
@@ -15,6 +16,7 @@ const routes: RouteObject[] = [
   { path: '/history', element: <HistoryScreen /> },
   { path: '/signin', element: <SignInScreen /> },
   { path: '/demo', element: <DemoScreen /> },
+  { path: '/report', element: <ReportScreen /> },
   { path: '*', element: <Navigate to="/" replace /> },
 ]
 

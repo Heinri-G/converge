@@ -1,6 +1,6 @@
 import { readGuestSession, saveGuestSession } from '@/lib/offline'
 import { upsertAnalyses, upsertCandidates, type CandidateRowReference } from '@/lib/db'
-import type { ScrapeRequest, ScrapeResponse } from '@/lib/types'
+import type { ResearchTier, ScrapeRequest, ScrapeResponse } from '@/lib/types'
 import { runScrapeAndAnalyze } from './api'
 
 export type ResearchPhase = 'geocoding' | 'scraping' | 'filtering' | 'analyzing' | 'complete'
@@ -34,7 +34,7 @@ async function persistRemoteResults(sessionId: string, result: ScrapeResponse) {
   await upsertAnalyses(analysisRows)
 }
 
-async function persistGuestResults(result: ScrapeResponse) {
+async function persistGuestResults(result: ScrapeResponse, tier: ResearchTier) {
   const current = await readGuestSession()
   if (!current) return
 
@@ -42,6 +42,7 @@ async function persistGuestResults(result: ScrapeResponse) {
     ...current,
     candidates: result.candidates,
     analysis: analysisForGuest(result),
+    tier,
   })
 }
 
@@ -52,7 +53,7 @@ export async function runResearch({ input, sessionId, onPhase }: RunResearchOpti
 
   onPhase?.('filtering')
   if (sessionId) await persistRemoteResults(sessionId, result)
-  else await persistGuestResults(result)
+  else await persistGuestResults(result, input.tier)
 
   onPhase?.('analyzing')
   onPhase?.('complete')

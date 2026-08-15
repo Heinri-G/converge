@@ -12,7 +12,7 @@ References: ARCHITECTURE.md (pillar flow 4), PRODUCT.md (Actionable synthesis).
 - **Anti-Picks are rule-based, with reasons pulled from `analysis`:** a candidate is a pick-to-avoid when it shows recurring defects, or a sentiment/price mismatch (see rules below). Reasons must cite actual `analysis.defects`/`cons`, never invented claims.
 - Mobile-first: the matrix **reflows to stacked cards on phones** (one candidate per card, per the table→card pattern), and a full matrix table on `min-width: md`+.
 
-## Step 1 — `reports` table (migration `0004_reports`)
+## Step 1 — `reports` table (migration `0006_reports`)
 
 ```sql
 create table public.reports (
@@ -95,6 +95,15 @@ Expose `synthesize(session, candidates, analysis): { matrix, top_3, anti_picks }
 2. Playwright at **390px**: report shows stacked matrix cards, Top 3, Anti-Picks with reasons; no overflow; at **1440px**: matrix table renders; same data.
 3. Persistence: report row upserts once; rerun doesn't duplicate.
 4. `npm run lint && npm run typecheck`; impeccable detector once.
+
+## Implementation notes (built)
+
+- **Engine (`engine.ts`), pure + deterministic:** `synthesize(source, candidates, analysis)` returns `{ title, matrix, top_3, anti_picks }`. All weights/rules are named constants: `SCORE_WEIGHTS` (sentiment 0.5, proximity 0.2, coverage 0.2, price 0.1), `PRICE_BAND_THRESHOLDS`/`PRICE_BAND_SCORE` (mid preferred), `EVIDENCE_TARGET`, `PROXIMITY_CAP_MINUTES`, `TOP_3_COUNT`, `DEFECTS_THRESHOLD` (≥2), `OVERHYPED_MIN_*` (sentiment > 0.4, rating ≥ 4, cons ≥ 3). `rankScore` sums to a 0..1 `compositeScore`; `MatrixRow.sentimentScore`/`compositeScore` are `null` for candidates without analysis (kept in the matrix, excluded from Top 3).
+- **Guard:** anti-picks are computed first; any candidate also in the Top 3 stays in the Top 3 with a tension note ("also flags a risk below…") and is removed from `anti_picks` — so a ≤3-candidate pull yields no anti-picks (spec's "recommendation wins").
+- **`sourceCoverage` approximation:** per-item source attribution isn't tracked yet (04's analysis merges per candidate), so `coverageScore` measures analysis evidence density (`pros+cons+defects` relative to `EVIDENCE_TARGET`) as a stand-in; swapping to distinct-source counts is a follow-up when adapters tag each point.
+- **Data flow / integration:** `runResearch` now persists the pull `tier` on the guest session; ResearchRun's results card links to `/report`; `ReportScreen` loads the guest session (or `?session=` for signed-in), synthesizes, and — for signed-in — upserts via `saveReport(session_id)` (unique `session_id` → reruns never duplicate). Guests render in-memory (no `research_sessions` row yet) with a "Start a new research" affordance.
+- **Types:** `MatrixRow.sentimentScore`/`compositeScore` are `number | null` (spec's "flagged null" behavior), `tier` is `ResearchTier`. `GuestSessionRecord` gained `tier?: ResearchTier`.
+- **RLS:** `reports` uses template T2 (owner via `research_sessions` join); grants mirror 04. Migration file is `0006_reports.sql` (sequential numbering, not the spec's illustrative `0004`).
 
 ## Acceptance checklist
 
