@@ -4,7 +4,7 @@ export function TopThree({ options }: { options: RankedOption[] }) {
   if (options.length === 0) {
     return (
       <p className="text-sm leading-5 text-muted-foreground">
-        No ranked options yet — candidate analysis is missing for this pull.
+        No ranked options yet — candidate analysis is missing for this search.
       </p>
     )
   }

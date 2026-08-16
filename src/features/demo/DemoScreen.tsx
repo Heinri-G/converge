@@ -36,7 +36,7 @@ export default function DemoScreen() {
           </span>
         </div>
         <h1 className="max-w-xl text-[1.7rem] leading-tight font-semibold tracking-tight text-balance">
-          One coffee decision, already folded.
+          One coffee decision, end to end.
         </h1>
         <p className="max-w-2xl text-[15px] leading-6 text-muted-foreground">
           Walk through a completed Converge run. Everything here is synthetic fixture data; no
@@ -129,20 +129,14 @@ function DemoMapStep() {
           It can own the counter
         </div>
       </div>
-      <div className="flex flex-wrap gap-2" aria-label="Demo tier sequence">
-        {['Capsule', 'Manual Filter', 'Entry Espresso', 'Prosumer'].map((tier, index) => (
-          <span
-            key={tier}
-            className={cn(
-              'rounded-sm border px-2 py-1 text-sm',
-              index === 3
-                ? 'border-primary bg-primary/10 text-foreground'
-                : 'border-border text-muted-foreground',
-            )}
-          >
-            {tier}
-          </span>
-        ))}
+      <div className="space-y-2">
+        <p className="font-mono text-[10px] tracking-[0.18em] text-muted-foreground uppercase">
+          Your focus
+        </p>
+        <div className="flex min-h-11 items-center gap-3 rounded-lg border border-primary bg-primary/10 px-4 text-sm font-medium">
+          <Check aria-hidden="true" className="size-4 text-primary" />
+          Enthusiast setup
+        </div>
       </div>
     </div>
   )
@@ -150,10 +144,10 @@ function DemoMapStep() {
 
 function DemoProgressStep() {
   const phases = [
-    'Geocoding starting point',
-    'Collecting source listings',
-    'Filtering by drive-time radius',
-    'Extracting sentiment and defects',
+    'Finding places near you',
+    'Collecting listings & reviews',
+    'Checking drive times',
+    'Summarizing what owners say',
   ]
   return (
     <ol className="space-y-3" aria-label="Completed demo phases">

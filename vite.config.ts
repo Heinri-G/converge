@@ -80,6 +80,7 @@ export default defineConfig(({ mode }) => ({
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
+      'npm:zod@4.4.3': 'zod',
     },
   },
 }))

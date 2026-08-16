@@ -48,48 +48,48 @@ insert into public.domain_branches
   (id, parent_id, domain_slug, slug, tier, label, description, ordering)
 values
   ('00000000-0000-0000-0000-000000000301', null, 'coffee-espresso', 'capsule',
-    'capsule', 'Capsule', 'The smallest useful starting point: clear constraints, little ceremony.', 0),
+    'capsule', 'Quick & simple', 'A no-fuss setup that fits small spaces and busy mornings.', 0),
   ('00000000-0000-0000-0000-000000000302', '00000000-0000-0000-0000-000000000301',
-    'coffee-espresso', 'manual-filter', 'manual_filter', 'Manual Filter',
-    'More control and a compact setup, without turning the counter into a station.', 1),
+    'coffee-espresso', 'manual-filter', 'manual_filter', 'Compact & manual',
+    'A hands-on routine that stays out of the way.', 1),
   ('00000000-0000-0000-0000-000000000303', '00000000-0000-0000-0000-000000000301',
-    'coffee-espresso', 'entry-espresso', 'entry_espresso', 'Entry Espresso',
-    'A repeatable espresso routine with a manageable learning curve.', 2),
+    'coffee-espresso', 'entry-espresso', 'entry_espresso', 'Everyday espresso',
+    'A repeatable espresso routine with a gentle learning curve.', 2),
   ('00000000-0000-0000-0000-000000000304', '00000000-0000-0000-0000-000000000301',
-    'coffee-espresso', 'prosumer', 'prosumer', 'Prosumer',
-    'A dedicated counter setup for people who want to tune the whole ritual.', 3);
+    'coffee-espresso', 'prosumer', 'prosumer', 'Enthusiast setup',
+    'A dedicated counter setup for tuning the whole ritual.', 3);
 
 insert into public.gate_questions
   (id, branch_id, prompt, tooltip, answer_type, options, weight, ordering)
 values
   ('00000000-0000-0000-0000-000000000401',
     '00000000-0000-0000-0000-000000000301',
-    'Where will this coffee setup live?',
-    'Footprint is the first practical split: a counter fixture asks for a different commitment than a setup that needs to pack away.',
+    'How much counter space can this setup claim?',
+    'Footprint is the first real tradeoff — something that must pack away can''t be a bulky counter fixture.',
     'single',
     '[
-      {"value":"00000000-0000-0000-0000-000000000302","label":"It needs to pack away"},
-      {"value":"00000000-0000-0000-0000-000000000303","label":"It can claim a small corner"},
+      {"value":"00000000-0000-0000-0000-000000000302","label":"It has to pack away each use"},
+      {"value":"00000000-0000-0000-0000-000000000303","label":"It can keep a small corner"},
       {"value":"00000000-0000-0000-0000-000000000304","label":"It can own the counter"}
     ]'::jsonb,
     1.4, 0),
   ('00000000-0000-0000-0000-000000000402',
     '00000000-0000-0000-0000-000000000302',
-    'How much control do you want over the ritual?',
-    'More control can improve the cup, but it also adds steps you will repeat every time you brew.',
+    'How involved do you want the daily routine to be?',
+    'More control usually means more steps every brew — worth knowing before you commit.',
     'single',
     '[
-      {"value":"00000000-0000-0000-0000-000000000303","label":"Keep it repeatable"},
-      {"value":"00000000-0000-0000-0000-000000000304","label":"Let me tune it"}
+      {"value":"00000000-0000-0000-0000-000000000303","label":"Keep it simple and repeatable"},
+      {"value":"00000000-0000-0000-0000-000000000304","label":"I want to dial it in each time"}
     ]'::jsonb,
     1.1, 0),
   ('00000000-0000-0000-0000-000000000403',
     '00000000-0000-0000-0000-000000000303',
-    'What should the next upgrade buy you?',
-    'The next constraint matters more than a feature list: speed, consistency, or room to keep learning.',
+    'What matters most in the next machine?',
+    'Speed, consistency, and room to tinker pull in different directions — pick the one that steers the search.',
     'single',
     '[
-      {"value":"00000000-0000-0000-0000-000000000303","label":"Fewer variables"},
-      {"value":"00000000-0000-0000-0000-000000000304","label":"More room to experiment"}
+      {"value":"00000000-0000-0000-0000-000000000303","label":"Consistency, every single time"},
+      {"value":"00000000-0000-0000-0000-000000000304","label":"Room to experiment and improve"}
     ]'::jsonb,
     1, 0);

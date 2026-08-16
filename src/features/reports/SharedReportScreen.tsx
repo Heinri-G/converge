@@ -77,7 +77,7 @@ export default function SharedReportScreen() {
 
           <div className="flex flex-wrap gap-2 text-sm text-muted-foreground">
             <span className="rounded-sm border border-border px-2 py-1">
-              {report.matrix[0]?.tier ?? 'broad'} pull
+              {report.matrix[0]?.tier === 'broad' ? 'Broad search' : 'Focused search'}
             </span>
             <span className="rounded-sm border border-border px-2 py-1">
               {report.matrix.length} options in the matrix

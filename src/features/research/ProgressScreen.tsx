@@ -10,10 +10,10 @@ interface ProgressScreenProps {
 }
 
 const phases: Array<{ id: ResearchPhase; label: string }> = [
-  { id: 'geocoding', label: 'Geocoding starting point' },
-  { id: 'scraping', label: 'Collecting source listings' },
-  { id: 'filtering', label: 'Filtering by drive-time radius' },
-  { id: 'analyzing', label: 'Extracting sentiment and defects' },
+  { id: 'geocoding', label: 'Finding places near you' },
+  { id: 'scraping', label: 'Collecting listings & reviews' },
+  { id: 'filtering', label: 'Checking drive times' },
+  { id: 'analyzing', label: 'Summarizing what owners say' },
 ]
 
 export function ProgressScreen({ phase, error, onCancel }: ProgressScreenProps) {
@@ -25,16 +25,16 @@ export function ProgressScreen({ phase, error, onCancel }: ProgressScreenProps) 
       <CardHeader className="gap-2 px-5 py-5">
         <CardTitle className="text-base">
           {phase === 'error'
-            ? 'The pull stopped.'
+            ? 'The search stopped.'
             : phase === 'cancelled'
-              ? 'The pull was cancelled.'
+              ? 'The search was cancelled.'
               : complete
-                ? 'The pull is ready.'
+                ? 'The search finished.'
                 : 'Converge is working.'}
         </CardTitle>
         <p className="text-sm leading-5 text-muted-foreground">
           {error ??
-            'The pipeline keeps the search bounded while it works through the source material.'}
+            'Searching listings, reviews, and forums, focused on your setup.'}
         </p>
       </CardHeader>
       <CardContent className="space-y-5 px-5 pb-5">
@@ -60,7 +60,7 @@ export function ProgressScreen({ phase, error, onCancel }: ProgressScreenProps) 
         </ol>
         {!complete && (
           <Button type="button" variant="outline" className="min-h-11 w-full" onClick={onCancel}>
-            Cancel pull
+            Stop
           </Button>
         )}
       </CardContent>

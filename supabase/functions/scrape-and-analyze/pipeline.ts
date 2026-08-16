@@ -468,10 +468,15 @@ export async function runPipeline(
 
   for (const source of dependencies.sources) {
     await waitForSource(source, lastCallAt)
-    const listings = await withTimeout(
-      source.fetch(request.query, origin, request.radiusMinutes),
-      source.timeoutMs ?? 15_000,
-    )
+    let listings: RawListing[]
+    try {
+      listings = await withTimeout(
+        source.fetch(request.query, origin, request.radiusMinutes),
+        source.timeoutMs ?? 15_000,
+      )
+    } catch {
+      continue
+    }
     for (const listing of listings.slice(0, request.maxResults * 3)) {
       collected.push({ source: source.id, listing })
     }
@@ -492,7 +497,11 @@ export async function runPipeline(
     let driveMinutes: number | undefined
     if (origin && request.radiusMinutes !== undefined) {
       if (!listing.geo) continue
-      driveMinutes = await withTimeout(dependencies.geo.driveMinutes(origin, listing.geo), 5_000)
+      try {
+        driveMinutes = await withTimeout(dependencies.geo.driveMinutes(origin, listing.geo), 5_000)
+      } catch {
+        continue
+      }
       if (
         !isFiniteNumber(driveMinutes) ||
         driveMinutes < 0 ||

@@ -100,6 +100,79 @@ describe('scrape-and-analyze pipeline', () => {
     expect(parseSentiment('{"sentimentScore":"bad"}', 'fake-model')).toBeNull()
   })
 
+  it('keeps working when one source fails and another succeeds', async () => {
+    const dependencies: PipelineDependencies = {
+      geo: {
+        async resolve() {
+          return { lat: 52.1, lng: 5.1 }
+        },
+        async driveMinutes() {
+          return 10
+        },
+      },
+      sources: [
+        {
+          id: 'broken',
+          async fetch() {
+            throw new Error('provider down')
+          },
+        },
+        {
+          id: 'healthy',
+          async fetch() {
+            return [
+              { sourceUrl: 'https://example.com/ok', name: 'Working listing', geo: { lat: 52.1, lng: 5.1 } },
+            ]
+          },
+        },
+      ],
+      sentiment: {
+        async analyze() {
+          return { sentimentScore: 0.5, pros: [], cons: [], defects: [], summary: 'Fine' }
+        },
+      },
+      model: 'fake-model',
+    }
+
+    const result = await runPipeline(request, dependencies)
+    expect(result.candidates).toHaveLength(1)
+    expect(result.candidates[0]?.name).toBe('Working listing')
+  })
+
+  it('skips a listing whose drive time cannot be resolved instead of failing the batch', async () => {
+    const dependencies: PipelineDependencies = {
+      geo: {
+        async resolve() {
+          return { lat: 52.1, lng: 5.1 }
+        },
+        async driveMinutes(_from, to) {
+          if (to.lat === 52.3) throw new Error('route lookup failed')
+          return 8
+        },
+      },
+      sources: [
+        {
+          id: 'fake',
+          async fetch() {
+            return [
+              { sourceUrl: 'https://example.com/good', name: 'Good', geo: { lat: 52.1, lng: 5.1 } },
+              { sourceUrl: 'https://example.com/bad', name: 'Bad', geo: { lat: 52.3, lng: 5.1 } },
+            ]
+          },
+        },
+      ],
+      sentiment: {
+        async analyze() {
+          return { sentimentScore: 0.4, pros: [], cons: [], defects: [], summary: 'OK' }
+        },
+      },
+      model: 'fake-model',
+    }
+
+    const result = await runPipeline(request, dependencies)
+    expect(result.candidates.map((candidate) => candidate.name)).toEqual(['Good'])
+  })
+
   it('supports non-geographic research without routing fields', async () => {
     const requestWithoutGeo = validateRequestBody({
       query: 'best value for money on a budget',

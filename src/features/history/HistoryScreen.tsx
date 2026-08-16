@@ -20,7 +20,7 @@ function resolutionLabel(resolution: SessionResolution): string {
     case 'complete':
       return 'Complete'
     case 'fast_tracked':
-      return 'Fast Track'
+      return 'Quick results'
     default:
       return 'In progress'
   }
@@ -82,7 +82,7 @@ export default function HistoryScreen() {
       const cloned = await createClonedSession(session.id, 'complete')
       navigate(`/research?session=${cloned.id}`)
     } catch {
-      setError('A fresh pull could not be started. Try again.')
+      setError('A new search could not be started. Try again.')
     }
   }
 
@@ -96,8 +96,8 @@ export default function HistoryScreen() {
           History, reopened — never re-researched.
         </h1>
         <p className="max-w-2xl text-[15px] leading-6 text-muted-foreground">
-          Finished reports and in-progress gates live here. Open one to re-read it, refine it
-          without re-answering, or pull it again with the same answers.
+          Finished reports and in-progress research live here. Open one to re-read it, refine it
+          without re-answering, or run it again with the same answers.
         </p>
       </header>
 
@@ -177,7 +177,7 @@ export default function HistoryScreen() {
             <div>
               <h2 className="text-base font-semibold">No research saved yet.</h2>
               <p className="mt-1 text-sm leading-5 text-muted-foreground">
-                Run a gate and pull once, and every finished report lands here.
+                Finish a search and the report lands here.
               </p>
             </div>
             <Button asChild className="min-h-11">

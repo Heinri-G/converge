@@ -4,7 +4,11 @@ import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { objectiveLabel, type ResearchIntent } from '@/lib/research-intent'
+import {
+  objectiveLabel,
+  type ResearchIntent,
+  type ResearchObjective,
+} from '@/lib/research-intent'
 import type { AnalysisDraft, ResearchTier, ScrapeRequest, ScrapeResponse } from '@/lib/types'
 import { ProgressScreen } from './ProgressScreen'
 import { runResearch, type ResearchPhase } from './runResearch'
@@ -24,7 +28,17 @@ function analysisFor(result: ScrapeResponse, candidateId: string): AnalysisDraft
   return result.analysis[candidateId] ?? null
 }
 
+const OBJECTIVES: Array<{ value: ResearchObjective; label: string }> = [
+  { value: 'best_overall', label: 'Best overall fit' },
+  { value: 'best_value', label: 'Best value for money' },
+  { value: 'lowest_cost', label: 'Lowest cost' },
+  { value: 'closest', label: 'Closest option' },
+  { value: 'highest_quality', label: 'Highest quality' },
+  { value: 'lowest_risk', label: 'Lowest risk' },
+]
+
 export function ResearchRun({ domainSlug, tier, intent, sessionId }: ResearchRunProps) {
+  const [objective, setObjective] = useState<ResearchObjective>(intent.objective)
   const [address, setAddress] = useState(intent.location?.address ?? '')
   const [useGeo, setUseGeo] = useState(
     Boolean(intent.location?.address || intent.hardConstraints.maxDriveMinutes),
@@ -32,7 +46,6 @@ export function ResearchRun({ domainSlug, tier, intent, sessionId }: ResearchRun
   const [radiusMinutes, setRadiusMinutes] = useState(
     String(intent.hardConstraints.maxDriveMinutes ?? 30),
   )
-  const [maxResults, setMaxResults] = useState('10')
   const [phase, setPhase] = useState<ResearchPhase | 'cancelled' | 'error' | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<ScrapeResponse | null>(null)
@@ -47,11 +60,11 @@ export function ResearchRun({ domainSlug, tier, intent, sessionId }: ResearchRun
     setPhase('geocoding')
 
     const input: ScrapeRequest = {
-      query: `${displayDomain(domainSlug)} ${intent.objective}`.trim(),
+      query: `${displayDomain(domainSlug)} ${objectiveLabel(objective)}`.trim(),
       domainSlug,
-      intent,
+      intent: { ...intent, objective },
       tier,
-      maxResults: Number(maxResults),
+      maxResults: 10,
     }
     if (useGeo) {
       input.geo = { address: address.trim() }
@@ -72,7 +85,7 @@ export function ResearchRun({ domainSlug, tier, intent, sessionId }: ResearchRun
       setPhase('complete')
     } catch (runError) {
       if (currentRun !== runId.current) return
-      setError(runError instanceof Error ? runError.message : 'The research pull failed.')
+      setError(runError instanceof Error ? runError.message : 'The search failed.')
       setPhase('error')
     }
   }
@@ -88,17 +101,13 @@ export function ResearchRun({ domainSlug, tier, intent, sessionId }: ResearchRun
         <Card className="border border-border py-0 shadow-none">
           <CardHeader className="gap-2 px-5 py-5">
             <p className="font-mono text-[10px] tracking-[0.18em] text-primary uppercase">
-              Map ready
+              Your search
             </p>
-            <CardTitle className="text-xl leading-tight">Now shape the pull.</CardTitle>
+            <CardTitle className="text-xl leading-tight">Ready to search.</CardTitle>
             <p className="text-sm leading-5 text-muted-foreground">
-              Hard constraints stay hard. The objective guides the tradeoffs between the options
-              that remain.
+              Check what Converge understood — you can adjust anything before the search starts.
             </p>
             <div className="flex flex-wrap gap-2 text-sm text-muted-foreground">
-              <span className="rounded-sm border border-border px-2 py-1">
-                {objectiveLabel(intent.objective)}
-              </span>
               {intent.hardConstraints.maxPrice !== undefined && (
                 <span className="rounded-sm border border-border px-2 py-1">
                   Under{' '}
@@ -115,6 +124,22 @@ export function ResearchRun({ domainSlug, tier, intent, sessionId }: ResearchRun
           </CardHeader>
           <CardContent className="px-5 pb-5">
             <form className="space-y-4" onSubmit={(event) => void submit(event)}>
+              <label className="block space-y-2 text-sm font-medium" htmlFor="research-objective">
+                What matters most
+                <select
+                  id="research-objective"
+                  className="flex h-11 w-full rounded-lg border border-input bg-background px-3 text-base text-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                  value={objective}
+                  onChange={(event) => setObjective(event.target.value as ResearchObjective)}
+                >
+                  {OBJECTIVES.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
               {useGeo ? (
                 <>
                   <label className="block space-y-2 text-sm font-medium" htmlFor="research-address">
@@ -153,25 +178,12 @@ export function ResearchRun({ domainSlug, tier, intent, sessionId }: ResearchRun
                   Add a drive-time boundary
                 </Button>
               )}
-              <label className="block space-y-2 text-sm font-medium" htmlFor="research-max-results">
-                Result cap
-                <select
-                  id="research-max-results"
-                  className="flex h-11 w-full rounded-lg border border-input bg-background px-3 text-base text-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-                  value={maxResults}
-                  onChange={(event) => setMaxResults(event.target.value)}
-                >
-                  <option value="10">10 options</option>
-                  <option value="20">20 options</option>
-                  <option value="50">50 options</option>
-                </select>
-              </label>
               <Button
                 type="submit"
                 className="min-h-11 w-full"
                 disabled={useGeo && !address.trim()}
               >
-                Run research
+                Find my options
               </Button>
             </form>
           </CardContent>
@@ -189,13 +201,13 @@ export function ResearchRun({ domainSlug, tier, intent, sessionId }: ResearchRun
               Results
             </p>
             <CardTitle className="text-xl leading-tight">
-              {result.candidates.length} options survived the constraints.
+              {result.candidates.length} options matched your setup.
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 px-5 pb-5">
             {result.candidates.length === 0 ? (
               <p className="text-sm leading-5 text-muted-foreground">
-                No candidates came back. Check the provider adapters and try the pull again.
+                Nothing came back — try a broader prompt or loosen the radius.
               </p>
             ) : (
               result.candidates.map((candidate) => {
@@ -224,8 +236,8 @@ export function ResearchRun({ domainSlug, tier, intent, sessionId }: ResearchRun
                     </p>
                     {candidate.hardConstraintStatus === 'unknown' && (
                       <p className="mt-2 text-sm text-valley">
-                        Constraint data is incomplete; this option cannot be treated as a confirmed
-                        match.
+                        We couldn't confirm this option meets your constraint — treat it as
+                        unverified.
                       </p>
                     )}
                     {analysis && (

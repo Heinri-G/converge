@@ -190,6 +190,16 @@ export function GateWizard({
     await resumeSnapshot(session.stage_state, session.resolution)
   })
 
+  const resumeFromPrompt = useEffectEvent(async (availableDomains: string[]) => {
+    if (fastTrack) {
+      selectPromptDomain()
+      return
+    }
+    if (availableDomains.includes(intent.domain)) {
+      await selectDomain(intent.domain)
+    }
+  })
+
   useEffect(() => {
     let active = true
 
@@ -200,8 +210,8 @@ export function GateWizard({
         setCatalogState('ready')
         if (sessionId) {
           void resumeSignedInSession(sessionId).catch(() => undefined)
-        } else if (initialPrompt && fastTrack) {
-          selectPromptDomain()
+        } else if (initialPrompt) {
+          void resumeFromPrompt(availableDomains)
         } else {
           void resumeGuestSession().catch(() => undefined)
         }
@@ -229,7 +239,9 @@ export function GateWizard({
   }, [fastTrack, initialPrompt, selectPromptDomain, sessionId])
 
   async function selectDomain(domainSlug: string) {
-    setIntent((current) => deriveResearchIntent(current.topic, domainSlug))
+    setIntent((current) =>
+      current.domain === domainSlug ? current : deriveResearchIntent(current.topic, domainSlug),
+    )
     setSelectedDomain(domainSlug)
     setQuestionState('loading')
     setError(null)
@@ -288,7 +300,7 @@ export function GateWizard({
       onComplete?.(nextState)
     } catch {
       setQuestionState('error')
-      setError('Fast Track could not be saved. Try again.')
+      setError("That couldn't be saved. Try again.")
     }
   }
 
@@ -352,14 +364,13 @@ export function GateWizard({
     <section className="mx-auto flex min-h-full w-full max-w-3xl flex-col gap-6 pb-8">
       <header className="space-y-3">
         <p className="font-mono text-[11px] tracking-[0.22em] text-muted-foreground uppercase">
-          Stage gate 1
+          A few quick questions
         </p>
         <h1 className="max-w-xl text-[1.7rem] leading-tight font-semibold tracking-tight text-balance">
-          Fold the question before you chase the answer.
+          Answer a couple of quick questions — get a focused shortlist.
         </h1>
         <p className="max-w-2xl text-[15px] leading-6 text-muted-foreground">
-          Start with the variable that changes the decision. Converge will keep the path short and
-          leave the rabbit hole behind.
+          Each question targets what changes the outcome most. No rabbit holes.
         </p>
       </header>
 
@@ -374,7 +385,7 @@ export function GateWizard({
         <Card className="border border-border py-0 shadow-none">
           <CardContent className="space-y-4 px-5 py-5">
             <div>
-              <h2 className="text-base font-semibold">The catalog is folded away.</h2>
+              <h2 className="text-base font-semibold">We couldn't load the categories.</h2>
               <p className="mt-1 text-sm leading-5 text-muted-foreground">{error}</p>
             </div>
             <Button
@@ -392,9 +403,9 @@ export function GateWizard({
       {catalogState === 'ready' && !selectedDomain && (
         <div className="space-y-3">
           <div>
-            <h2 className="text-base font-semibold">Choose a domain to map.</h2>
+            <h2 className="text-base font-semibold">What are you comparing?</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              The catalog supplies the tiers and questions. Nothing is baked into this screen.
+              Pick a category, or use the one matched to your request.
             </p>
           </div>
           <div className="grid gap-2 sm:grid-cols-2">
@@ -406,11 +417,9 @@ export function GateWizard({
                 onClick={selectPromptDomain}
               >
                 <span>
-                  <span className="block font-medium">
-                    Use a {formatDomainSlug(intent.domain)} map
-                  </span>
+                  <span className="block font-medium">Use {formatDomainSlug(intent.domain)}</span>
                   <span className="mt-1 block text-sm font-normal text-primary-foreground/75">
-                    Generated from your request: {intent.topic}
+                    Matched from your request: {intent.topic}
                   </span>
                 </span>
                 <span aria-hidden="true" className="font-mono text-xs">
@@ -429,7 +438,7 @@ export function GateWizard({
                 <span>
                   <span className="block font-medium">{formatDomainSlug(domain)}</span>
                   <span className="mt-1 block text-sm font-normal text-muted-foreground">
-                    Open the adaptive map
+                    Open {formatDomainSlug(domain)}
                   </span>
                 </span>
                 <span aria-hidden="true" className="font-mono text-xs text-primary">
@@ -439,28 +448,6 @@ export function GateWizard({
             ))}
           </div>
         </div>
-      )}
-
-      {selectedDomain && branches.length > 0 && (
-        <section aria-label="Available tiers" className="space-y-2">
-          <p className="font-mono text-[10px] tracking-[0.18em] text-muted-foreground uppercase">
-            Tier sequence
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {branches.map((branch) => (
-              <span
-                key={branch.id}
-                className={`rounded-sm border px-2 py-1 text-sm ${
-                  branch.id === activeBranchId
-                    ? 'border-primary bg-primary/10 text-foreground'
-                    : 'border-border text-muted-foreground'
-                }`}
-              >
-                {branch.label}
-              </span>
-            ))}
-          </div>
-        </section>
       )}
 
       {selectedDomain && questionState === 'loading' && (
@@ -489,8 +476,7 @@ export function GateWizard({
         questionState === 'ready' && (
           <QuestionSheet
             question={question}
-            branch={activeBranch}
-            branchPathLength={Math.min(MAX_DEPTH, gateState.branchPath.length)}
+            answered={Math.min(MAX_DEPTH, Object.keys(gateState.answers).length)}
             maxDepth={MAX_DEPTH}
             mobileOpen={mobileOpen}
             onMobileOpenChange={setMobileOpen}

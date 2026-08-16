@@ -53,21 +53,21 @@ export const DEMO_CANDIDATES: DemoCandidate[] = [
 export const DEMO_STEPS = [
   {
     id: 'map',
-    label: 'Fold the question',
+    label: 'Answer the questions',
     title: 'The counter can claim the setup.',
-    body: 'The demo answer selects a dedicated counter workflow, then keeps the path to one useful next question.',
+    body: 'The demo answer steers the search toward a dedicated counter setup, then keeps the path to one useful next step.',
   },
   {
     id: 'progress',
-    label: 'Run the pull',
-    title: 'A bounded pull, not an open tab spiral.',
-    body: 'The pipeline geocodes the starting point, filters by drive time, and extracts recurring defects from source text.',
+    label: 'Run the search',
+    title: 'A focused search, not an open tab spiral.',
+    body: 'Converge finds places near you, checks drive times, and summarizes what owners say.',
   },
   {
     id: 'candidates',
     label: 'Compare options',
-    title: 'Three options survive the first fold.',
-    body: 'Each option carries a source label, distance, rating, and a crease that says how much weight to give it.',
+    title: 'Three options make the shortlist.',
+    body: 'Each option carries a source label, distance, rating, and a mark that says how much weight to give it.',
   },
   {
     id: 'sentiment',

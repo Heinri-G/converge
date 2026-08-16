@@ -15,7 +15,7 @@ export function AntiPicks({ picks }: { picks: AntiPick[] }) {
   if (picks.length === 0) {
     return (
       <p className="text-sm leading-5 text-muted-foreground">
-        No options to avoid in this pull.
+        No options to avoid this time.
       </p>
     )
   }

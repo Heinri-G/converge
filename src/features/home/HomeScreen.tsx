@@ -51,7 +51,7 @@ export default function HomeScreen() {
           Research, without the rabbit hole.
         </h1>
         <p className="mt-2 text-[15px] text-muted-foreground">
-          Converge folds a question into a shortlist worth deciding on.
+          Describe what you're choosing — get a shortlist worth deciding on.
         </p>
       </div>
 
@@ -65,7 +65,7 @@ export default function HomeScreen() {
         />
         <div className="flex gap-3">
           <Button type="submit" size="lg" className="flex-1">
-            Deploy research
+            Start research
           </Button>
           <Button
             type="button"
@@ -76,7 +76,7 @@ export default function HomeScreen() {
                 navigate(`/research?prompt=${encodeURIComponent(prompt.trim())}&fastTrack=1`)
             }}
           >
-            Fast Track
+            Skip the questions
           </Button>
         </div>
       </form>
@@ -88,10 +88,13 @@ export default function HomeScreen() {
       <div>
         <div className="flex items-center gap-2.5">
           <span className="font-mono text-[10px] font-medium tracking-[0.18em] text-muted-foreground uppercase">
-            Crease field
+            Reading the marks
           </span>
           <span aria-hidden="true" className="h-px flex-1 bg-border" />
         </div>
+        <p className="mt-2 text-xs text-muted-foreground">
+          ∧ strengths · ∨ risks · × avoid
+        </p>
 
         <ul className="mt-3 flex flex-col gap-2.5">
           {CREASES.map((item) => (

@@ -1,17 +1,19 @@
 import {
-  ProviderNotConfiguredError,
   runPipeline,
   validateRequestBody,
-  type GeoAdapter,
   type PipelineDependencies,
-  type SentimentAdapter,
-  type SourceAdapter,
+  type RequestBody,
 } from './pipeline.ts'
+import { createGeoAdapter } from './geo.ts'
+import { createOverpassSource, createTavilySource } from './sources.ts'
+import { createSentimentAdapter } from './sentiment.ts'
 
 declare const Deno: {
   env: { get(name: string): string | undefined }
   serve(handler: (request: Request) => Response | Promise<Response>): void
 }
+
+const DEFAULT_LLM_BASE_URL = 'https://api.openai.com/v1'
 
 const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -24,31 +26,22 @@ function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: corsHeaders })
 }
 
-function notConfiguredDependencies(): PipelineDependencies {
-  const missingProvider = (name: string): ProviderNotConfiguredError =>
-    new ProviderNotConfiguredError(name)
+function buildDependencies(request: RequestBody): PipelineDependencies {
+  const model = Deno.env.get('LLM_MODEL') ?? ''
+  const sources = [createOverpassSource(request.domainSlug)]
+  const tavilyKey = Deno.env.get('TAVILY_API_KEY')
+  if (tavilyKey) sources.push(createTavilySource(tavilyKey))
 
-  const geo: GeoAdapter = {
-    async resolve() {
-      throw missingProvider('geo')
-    },
-    async driveMinutes() {
-      throw missingProvider('geo')
-    },
+  return {
+    geo: createGeoAdapter(),
+    sources,
+    sentiment: createSentimentAdapter({
+      apiKey: Deno.env.get('LLM_API_KEY') ?? '',
+      baseUrl: Deno.env.get('LLM_BASE_URL') ?? DEFAULT_LLM_BASE_URL,
+      model,
+    }),
+    model,
   }
-  const source: SourceAdapter = {
-    id: 'unconfigured',
-    async fetch() {
-      throw missingProvider('scrape')
-    },
-  }
-  const sentiment: SentimentAdapter = {
-    async analyze() {
-      throw missingProvider('sentiment')
-    },
-  }
-
-  return { geo, sources: [source], sentiment, model: Deno.env.get('LLM_MODEL') ?? '' }
 }
 
 async function handleRequest(request: Request): Promise<Response> {
@@ -78,10 +71,12 @@ async function handleRequest(request: Request): Promise<Response> {
   }
 
   try {
-    return json(await runPipeline(validated, notConfiguredDependencies()))
+    return json(await runPipeline(validated, buildDependencies(validated)))
   } catch (error) {
-    if (error instanceof ProviderNotConfiguredError) {
-      return json({ error: 'providers_not_configured' }, 503)
+    if (error instanceof Error) {
+      if (error.name === 'GeoProviderError') return json({ error: 'geocode_failed' }, 502)
+      if (error.name === 'LlmProviderError') return json({ error: 'sentiment_failed' }, 502)
+      if (error.name === 'SourceProviderError') return json({ error: 'source_failed' }, 502)
     }
     return json({ error: 'scrape_pipeline_failed' }, 502)
   }
