@@ -8,6 +8,7 @@ import {
   type CandidateRowReference,
 } from '../../lib/db'
 import { synthesize } from '../synthesis/engine'
+import { isResearchObjective } from '../../lib/research-intent'
 import type {
   AnalysisDraft,
   CandidateDraft,
@@ -89,8 +90,15 @@ export async function promoteGuestSession(user: User): Promise<ResearchSession |
 
       const tier: ResearchTier =
         guest.tier ?? (isFastTracked(guest.session.stage_state) ? 'broad' : 'entry_espresso')
+      const objective = isResearchObjective(guest.session.stage_state.objective)
+        ? guest.session.stage_state.objective
+        : undefined
       const report = synthesize(
-        { title: guest.session.title || formatTitle(guest.session.domain_slug), tier },
+        {
+          title: guest.session.title || formatTitle(guest.session.domain_slug),
+          tier,
+          ...(objective ? { objective } : {}),
+        },
         candidates,
         candidateAnalysis,
       )

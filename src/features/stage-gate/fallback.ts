@@ -3,23 +3,17 @@ import type { ResearchIntent } from '@/lib/research-intent'
 
 interface FallbackGate {
   branches: DomainBranch[]
-  question: GateQuestion
+  question: GateQuestion | null
   state: GateState
 }
 
-function currencySymbol(currency?: string): string {
-  if (currency === 'EUR') return '€'
-  if (currency === 'GBP') return '£'
-  return '$'
-}
-
-export function createFallbackGate(intent: ResearchIntent): FallbackGate {
+function buildBranches(intent: ResearchIntent): DomainBranch[] {
   const rootId = `fallback-${intent.domain}-root`
   const balancedId = `fallback-${intent.domain}-balanced`
   const budgetId = `fallback-${intent.domain}-budget`
   const specialistId = `fallback-${intent.domain}-specialist`
 
-  const branches: DomainBranch[] = [
+  return [
     {
       id: rootId,
       parentId: null,
@@ -61,45 +55,54 @@ export function createFallbackGate(intent: ResearchIntent): FallbackGate {
       ordering: 3,
     },
   ]
+}
 
-  const maxPrice = intent.hardConstraints.maxPrice
-  const symbol = currencySymbol(intent.hardConstraints.currency)
-
-  const question: GateQuestion =
-    maxPrice !== undefined
-      ? {
-          id: `fallback-${intent.domain}-budget-question`,
-          branchId: rootId,
-          prompt: `You said under ${symbol}${maxPrice} — how firm is that?`,
-          tooltip:
-            'If the number is a hard limit, we filter for it strictly. If it can bend, a clearly better option can win.',
-          answerType: 'single',
-          options: [
-            { value: budgetId, label: `Under ${symbol}${maxPrice} is a hard limit` },
-            { value: balancedId, label: 'A little over is fine if it is clearly better' },
-            { value: specialistId, label: 'Quality matters more than the number' },
-          ],
-          weight: 1,
-          ordering: 0,
-        }
-      : {
-          id: `fallback-${intent.domain}-question`,
-          branchId: rootId,
-          prompt: 'If two options both fit, what tips the decision?',
-          tooltip: 'This shapes how we rank the shortlist — price, effort, or performance.',
-          answerType: 'single',
-          options: [
-            { value: budgetId, label: 'The lowest price wins' },
-            { value: balancedId, label: 'The best everyday balance' },
-            { value: specialistId, label: 'The best performance wins' },
-          ],
-          weight: 1,
-          ordering: 0,
-        }
+function buildPrioritizationQuestion(intent: ResearchIntent): GateQuestion {
+  const rootId = `fallback-${intent.domain}-root`
+  const balancedId = `fallback-${intent.domain}-balanced`
+  const budgetId = `fallback-${intent.domain}-budget`
+  const specialistId = `fallback-${intent.domain}-specialist`
 
   return {
-    branches,
-    question,
-    state: { domainSlug: intent.domain, branchPath: [rootId], answers: {} },
+    id: `fallback-${intent.domain}-question`,
+    branchId: rootId,
+    prompt: 'If two options both fit, what tips the decision?',
+    tooltip: 'This shapes how we rank the shortlist — price, effort, or performance.',
+    answerType: 'single',
+    options: [
+      { value: budgetId, label: 'The lowest price wins' },
+      { value: balancedId, label: 'The best everyday balance' },
+      { value: specialistId, label: 'The best performance wins' },
+    ],
+    weight: 1,
+    ordering: 0,
   }
+}
+
+/**
+ * Deterministic fallback gate used for guests and when gate generation fails.
+ * Asks a single question only when the prompt has not already pinned the
+ * objective; otherwise it completes immediately and the run form collects the
+ * remaining missing inputs (budget, availability).
+ */
+export function createFallbackGate(intent: ResearchIntent): FallbackGate {
+  const rootId = `fallback-${intent.domain}-root`
+  const branches = buildBranches(intent)
+
+  const objectivePinned = intent.objective !== 'best_overall'
+  const question = objectivePinned ? null : buildPrioritizationQuestion(intent)
+
+  const state: GateState = { domainSlug: intent.domain, branchPath: [rootId], answers: {} }
+
+  return { branches, question, state }
+}
+
+/** Maps a fallback prioritization answer to a concrete objective for the run form. */
+export function fallbackObjectiveFromBranch(
+  value: string,
+): { objective?: ResearchIntent['objective'] } {
+  if (value.endsWith('-budget')) return { objective: 'lowest_cost' }
+  if (value.endsWith('-specialist')) return { objective: 'highest_quality' }
+  if (value.endsWith('-balanced')) return { objective: 'best_overall' }
+  return {}
 }

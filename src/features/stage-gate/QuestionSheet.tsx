@@ -20,6 +20,7 @@ interface QuestionSheetProps {
   onMobileOpenChange: (open: boolean) => void
   onAnswer: (answer: GateAnswer) => void
   onFastTrack: () => void
+  onStartFresh?: () => void
 }
 
 function AnswerButtons({ question, onAnswer }: Pick<QuestionSheetProps, 'question' | 'onAnswer'>) {
@@ -113,6 +114,19 @@ function FastTrackRow({ onFastTrack }: { onFastTrack: () => void }) {
   )
 }
 
+function StartFreshRow({ onStartFresh }: { onStartFresh: () => void }) {
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      className="min-h-11 w-full text-muted-foreground hover:text-foreground"
+      onClick={onStartFresh}
+    >
+      Start over — clear saved progress
+    </Button>
+  )
+}
+
 export function QuestionSheet({
   question,
   answered,
@@ -121,6 +135,7 @@ export function QuestionSheet({
   onMobileOpenChange,
   onAnswer,
   onFastTrack,
+  onStartFresh,
 }: QuestionSheetProps) {
   const isMobile = useIsMobile()
 
@@ -142,6 +157,7 @@ export function QuestionSheet({
               onAnswer={onAnswer}
             />
             <FastTrackRow onFastTrack={onFastTrack} />
+            {onStartFresh && <StartFreshRow onStartFresh={onStartFresh} />}
           </CardContent>
         </Card>
       </div>
@@ -149,14 +165,17 @@ export function QuestionSheet({
       {isMobile && (
         <div className="md:hidden">
           {!mobileOpen && (
-            <Button
-              type="button"
-              variant="outline"
-              className="min-h-11 w-full"
-              onClick={() => onMobileOpenChange(true)}
-            >
-              Reopen current question
-            </Button>
+            <div className="space-y-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="min-h-11 w-full"
+                onClick={() => onMobileOpenChange(true)}
+              >
+                Reopen current question
+              </Button>
+              {onStartFresh && <StartFreshRow onStartFresh={onStartFresh} />}
+            </div>
           )}
           <Sheet open={mobileOpen} onOpenChange={onMobileOpenChange}>
             <SheetContent
@@ -181,6 +200,7 @@ export function QuestionSheet({
               </div>
               <div className="shrink-0 border-t border-border px-4 pt-3 pb-[calc(var(--safe-bottom)+1rem)]">
                 <FastTrackRow onFastTrack={onFastTrack} />
+                {onStartFresh && <StartFreshRow onStartFresh={onStartFresh} />}
               </div>
             </SheetContent>
           </Sheet>

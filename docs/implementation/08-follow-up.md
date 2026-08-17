@@ -66,3 +66,9 @@ Run the full loop and tick these off:
 - Whether the broad fallback gate gets promoted into seeded catalog content once LLM-generated gates land.
 - Overpass tag mappings per domain (`DOMAIN_OVERPASS_TAGS` in `sources.ts`; content-like, mirrors the `domain_branches` seed discipline).
 - Production SLA for geo/search providers (currently public rate-limited endpoints — see `09`).
+
+## Implementation notes (built)
+
+- **`generate-gate` function added** (`supabase/functions/generate-gate/`) — LLM-generated, per-session stage gates grouped by clarification type, zod-validated, cost-capped (≤2 groups, ≤2 questions per group), JWT-required. Deploy alongside `scrape-and-analyze` (`supabase functions deploy generate-gate`); it reuses `LLM_API_KEY`/`LLM_MODEL`/`LLM_BASE_URL` secrets — no new secrets.
+- **Synthesis is objective-aware:** `synthesize()` now accepts `SynthesisSource.objective` (persisted in `stage_state` at gate/run time); `best_value`/`lowest_cost` up-weight price and favor the low price band, `highest_quality` up-weights sentiment, `closest` up-weights proximity.
+- **Guest sessions stay local:** the generated gate is only invoked for signed-in sessions; guests and generation failures use the intent-aware deterministic fallback (`src/features/stage-gate/fallback.ts`). See the 03 implementation notes for the full flow-fluidify changes.

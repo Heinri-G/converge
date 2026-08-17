@@ -1,13 +1,18 @@
-import { useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import {
+  buildSearchQuery,
+  countryName,
+  localShopHint,
   objectiveLabel,
+  SHIPPING_COUNTRY_CODES,
   type ResearchIntent,
   type ResearchObjective,
+  type SearchContext,
 } from '@/lib/research-intent'
 import type { AnalysisDraft, ResearchTier, ScrapeRequest, ScrapeResponse } from '@/lib/types'
 import { ProgressScreen } from './ProgressScreen'
@@ -20,12 +25,27 @@ interface ResearchRunProps {
   sessionId?: string
 }
 
-function displayDomain(slug: string): string {
-  return slug.split('-').join(' ')
-}
-
 function analysisFor(result: ScrapeResponse, candidateId: string): AnalysisDraft | null {
   return result.analysis[candidateId] ?? null
+}
+
+function parseBudget(
+  value: string,
+  existingCurrency?: string,
+): { maxPrice: number; currency?: string } | null {
+  const trimmed = value.trim()
+  if (!trimmed) return null
+  const currency = /€/.test(trimmed)
+    ? 'EUR'
+    : /£/.test(trimmed)
+      ? 'GBP'
+      : /\$/.test(trimmed)
+        ? 'USD'
+        : existingCurrency
+  const digits = trimmed.replace(/[€£$\s,]/g, '').replace(/eur|gbp|usd/i, '')
+  const num = Number(digits)
+  if (!Number.isFinite(num) || num <= 0) return null
+  return currency ? { maxPrice: num, currency } : { maxPrice: num }
 }
 
 const OBJECTIVES: Array<{ value: ResearchObjective; label: string }> = [
@@ -37,8 +57,29 @@ const OBJECTIVES: Array<{ value: ResearchObjective; label: string }> = [
   { value: 'lowest_risk', label: 'Lowest risk' },
 ]
 
+const RADIUS_PRESETS = [15, 30, 45, 60, 90, 120]
+
+function radiusOptions(current: number): number[] {
+  return RADIUS_PRESETS.includes(current)
+    ? RADIUS_PRESETS
+    : [current, ...RADIUS_PRESETS].sort((a, b) => a - b)
+}
+
 export function ResearchRun({ domainSlug, tier, intent, sessionId }: ResearchRunProps) {
   const [objective, setObjective] = useState<ResearchObjective>(intent.objective)
+  const [editingObjective, setEditingObjective] = useState(false)
+  const [context, setContext] = useState<SearchContext>(
+    intent.preferences.context === 'place' ? 'place' : 'product',
+  )
+  const [locallyOrderable, setLocallyOrderable] = useState(
+    intent.preferences.context === 'product' &&
+      intent.preferences.locallyOrderable !== false,
+  )
+  const [shippingCountry, setShippingCountry] = useState<string | undefined>(
+    typeof intent.preferences.shippingCountry === 'string'
+      ? intent.preferences.shippingCountry
+      : undefined,
+  )
   const [address, setAddress] = useState(intent.location?.address ?? '')
   const [useGeo, setUseGeo] = useState(
     Boolean(intent.location?.address || intent.hardConstraints.maxDriveMinutes),
@@ -46,10 +87,26 @@ export function ResearchRun({ domainSlug, tier, intent, sessionId }: ResearchRun
   const [radiusMinutes, setRadiusMinutes] = useState(
     String(intent.hardConstraints.maxDriveMinutes ?? 30),
   )
+  const [budgetInput, setBudgetInput] = useState('')
   const [phase, setPhase] = useState<ResearchPhase | 'cancelled' | 'error' | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<ScrapeResponse | null>(null)
   const runId = useRef(0)
+
+  const budgetConstraint = useMemo(
+    () => parseBudget(budgetInput, intent.hardConstraints.currency),
+    [budgetInput, intent.hardConstraints.currency],
+  )
+  const effectiveMaxPrice = intent.hardConstraints.maxPrice ?? budgetConstraint?.maxPrice
+  const effectiveCurrency = intent.hardConstraints.currency ?? budgetConstraint?.currency
+  const wantsBudget =
+    (objective === 'best_value' || objective === 'lowest_cost') &&
+    intent.hardConstraints.maxPrice === undefined
+  const hasRequirements =
+    intent.hardConstraints.maxPrice !== undefined ||
+    intent.hardConstraints.minRating !== undefined ||
+    intent.hardConstraints.maxDriveMinutes !== undefined ||
+    budgetConstraint !== null
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -59,10 +116,24 @@ export function ResearchRun({ domainSlug, tier, intent, sessionId }: ResearchRun
     setResult(null)
     setPhase('geocoding')
 
+    const query = buildSearchQuery(intent.topic, domainSlug, objective, {
+      context,
+      useGeo,
+      address,
+      radiusMinutes: Number(radiusMinutes),
+      locallyOrderable,
+      ...(shippingCountry ? { shippingCountry } : {}),
+      preferences: intent.preferences,
+    })
+
+    const hardConstraints = budgetConstraint
+      ? { ...intent.hardConstraints, ...budgetConstraint }
+      : intent.hardConstraints
+
     const input: ScrapeRequest = {
-      query: `${displayDomain(domainSlug)} ${objectiveLabel(objective)}`.trim(),
+      query: query.slice(0, 200),
       domainSlug,
-      intent: { ...intent, objective },
+      intent: { ...intent, objective, hardConstraints },
       tier,
       maxResults: 10,
     }
@@ -95,6 +166,18 @@ export function ResearchRun({ domainSlug, tier, intent, sessionId }: ResearchRun
     setPhase('cancelled')
   }
 
+  function toggleContext() {
+    setContext((current) => {
+      const next = current === 'place' ? 'product' : 'place'
+      if (next === 'product' && objective === 'closest') setObjective('best_overall')
+      return next
+    })
+  }
+
+  const objectives = OBJECTIVES.filter(
+    (option) => context !== 'product' || option.value !== 'closest',
+  )
+
   return (
     <div className="space-y-6">
       {!phase || phase === 'cancelled' || phase === 'error' || phase === 'complete' ? (
@@ -108,11 +191,36 @@ export function ResearchRun({ domainSlug, tier, intent, sessionId }: ResearchRun
               Check what Converge understood — you can adjust anything before the search starts.
             </p>
             <div className="flex flex-wrap gap-2 text-sm text-muted-foreground">
-              {intent.hardConstraints.maxPrice !== undefined && (
+              <Button
+                type="button"
+                variant="outline"
+                className="h-11 min-h-0 rounded-sm px-2 py-1 text-sm font-normal"
+                onClick={toggleContext}
+              >
+                {context === 'place' ? 'Places to visit' : 'Product to buy'}
+              </Button>
+              {context === 'product' && locallyOrderable && (
+                <label className="flex items-center gap-1 rounded-sm border border-border px-1.5 py-1">
+                  <span className="text-xs">Orderable in</span>
+                  <select
+                    aria-label="Orderable country"
+                    className="bg-transparent text-sm font-medium text-foreground outline-none"
+                    value={shippingCountry ?? ''}
+                    onChange={(event) => setShippingCountry(event.target.value || undefined)}
+                  >
+                    <option value="">Your region</option>
+                    {SHIPPING_COUNTRY_CODES.map((code) => (
+                      <option key={code} value={code}>
+                        {countryName(code)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              {effectiveMaxPrice !== undefined && (
                 <span className="rounded-sm border border-border px-2 py-1">
-                  Under{' '}
-                  {intent.hardConstraints.currency ? `${intent.hardConstraints.currency} ` : ''}
-                  {intent.hardConstraints.maxPrice}
+                  Under {effectiveCurrency ? `${effectiveCurrency} ` : ''}
+                  {effectiveMaxPrice}
                 </span>
               )}
               {intent.hardConstraints.minRating !== undefined && (
@@ -124,21 +232,43 @@ export function ResearchRun({ domainSlug, tier, intent, sessionId }: ResearchRun
           </CardHeader>
           <CardContent className="px-5 pb-5">
             <form className="space-y-4" onSubmit={(event) => void submit(event)}>
-              <label className="block space-y-2 text-sm font-medium" htmlFor="research-objective">
-                What matters most
-                <select
-                  id="research-objective"
-                  className="flex h-11 w-full rounded-lg border border-input bg-background px-3 text-base text-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-                  value={objective}
-                  onChange={(event) => setObjective(event.target.value as ResearchObjective)}
-                >
-                  {OBJECTIVES.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <div className="space-y-2">
+                <span className="text-sm font-medium">Objective</span>
+                {editingObjective ? (
+                  <div className="space-y-2">
+                    <select
+                      id="research-objective"
+                      className="flex h-11 w-full rounded-lg border border-input bg-background px-3 text-base text-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                      value={objective}
+                      onChange={(event) => setObjective(event.target.value as ResearchObjective)}
+                    >
+                      {objectives.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="min-h-11 w-full text-muted-foreground"
+                      onClick={() => setEditingObjective(false)}
+                    >
+                      Done
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="flex min-h-11 w-full items-center justify-between px-4"
+                    onClick={() => setEditingObjective(true)}
+                  >
+                    <span>{objectiveLabel(objective)}</span>
+                    <span className="font-mono text-xs text-muted-foreground">Edit</span>
+                  </Button>
+                )}
+              </div>
 
               {useGeo ? (
                 <>
@@ -161,14 +291,15 @@ export function ResearchRun({ domainSlug, tier, intent, sessionId }: ResearchRun
                       value={radiusMinutes}
                       onChange={(event) => setRadiusMinutes(event.target.value)}
                     >
-                      <option value="15">15 minutes</option>
-                      <option value="30">30 minutes</option>
-                      <option value="45">45 minutes</option>
-                      <option value="60">60 minutes</option>
+                      {radiusOptions(Number(radiusMinutes)).map((value) => (
+                        <option key={value} value={value}>
+                          {value} minutes
+                        </option>
+                      ))}
                     </select>
                   </label>
                 </>
-              ) : (
+              ) : context === 'place' ? (
                 <Button
                   type="button"
                   variant="outline"
@@ -177,6 +308,42 @@ export function ResearchRun({ domainSlug, tier, intent, sessionId }: ResearchRun
                 >
                   Add a drive-time boundary
                 </Button>
+              ) : (
+                <label className="flex min-h-11 items-start gap-3 rounded-lg border border-border px-4 py-3">
+                  <input
+                    type="checkbox"
+                    className="mt-1 size-4"
+                    checked={locallyOrderable}
+                    onChange={(event) => setLocallyOrderable(event.target.checked)}
+                    aria-label="Prefer locally orderable items"
+                  />
+                  <span className="text-sm leading-5">
+                    <span className="font-medium">Prefer locally orderable items</span>
+                    <span className="block text-muted-foreground">
+                      {shippingCountry
+                        ? `Favour options you can order in ${countryName(shippingCountry)} — ${localShopHint(shippingCountry)}.`
+                        : `Favour options you can order locally — ${localShopHint()}.`}
+                    </span>
+                  </span>
+                </label>
+              )}
+              {wantsBudget && (
+                <label className="block space-y-2 text-sm font-medium" htmlFor="research-budget">
+                  Max budget (optional)
+                  <Input
+                    id="research-budget"
+                    className="h-11 text-base"
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="e.g. 300 or €250"
+                    value={budgetInput}
+                    onChange={(event) => setBudgetInput(event.target.value)}
+                  />
+                  <span className="block text-xs font-normal text-muted-foreground">
+                    A ceiling we filter for — you said you care about value, so this focuses the
+                    shortlist.
+                  </span>
+                </label>
               )}
               <Button
                 type="submit"
@@ -191,7 +358,13 @@ export function ResearchRun({ domainSlug, tier, intent, sessionId }: ResearchRun
       ) : null}
 
       {phase && phase !== 'complete' && (
-        <ProgressScreen phase={phase} error={error} onCancel={cancel} />
+        <ProgressScreen
+          phase={phase}
+          error={error}
+          onCancel={cancel}
+          context={context}
+          hasRequirements={hasRequirements}
+        />
       )}
 
       {phase === 'complete' && result && (

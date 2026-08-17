@@ -1,5 +1,11 @@
 import { readGuestSession, saveGuestSession } from '@/lib/offline'
-import { upsertAnalyses, upsertCandidates, type CandidateRowReference } from '@/lib/db'
+import {
+  loadResearchSession,
+  updateSessionStageState,
+  upsertAnalyses,
+  upsertCandidates,
+  type CandidateRowReference,
+} from '@/lib/db'
 import type { ResearchTier, ScrapeRequest, ScrapeResponse } from '@/lib/types'
 import { runScrapeAndAnalyze } from './api'
 
@@ -17,7 +23,7 @@ function analysisForGuest(result: ScrapeResponse): unknown[] {
     .map(([candidateId, analysis]) => ({ candidateId, ...analysis }))
 }
 
-async function persistRemoteResults(sessionId: string, result: ScrapeResponse) {
+async function persistRemoteResults(sessionId: string, result: ScrapeResponse, objective: string) {
   const references = await upsertCandidates(sessionId, result.candidates)
   const referencesByUrl = new Map(references.map((reference) => [reference.source_url, reference]))
   const analysisRows: Array<{
@@ -32,9 +38,15 @@ async function persistRemoteResults(sessionId: string, result: ScrapeResponse) {
   }
 
   await upsertAnalyses(analysisRows)
+
+  const session = await loadResearchSession(sessionId)
+  await updateSessionStageState(sessionId, {
+    ...session.stage_state,
+    objective,
+  })
 }
 
-async function persistGuestResults(result: ScrapeResponse, tier: ResearchTier) {
+async function persistGuestResults(result: ScrapeResponse, tier: ResearchTier, objective: string) {
   const current = await readGuestSession()
   if (!current) return
 
@@ -43,17 +55,20 @@ async function persistGuestResults(result: ScrapeResponse, tier: ResearchTier) {
     candidates: result.candidates,
     analysis: analysisForGuest(result),
     tier,
+    session: {
+      ...current.session,
+      stage_state: { ...current.session.stage_state, objective },
+    },
   })
 }
 
 export async function runResearch({ input, sessionId, onPhase }: RunResearchOptions) {
   onPhase?.('geocoding')
-  onPhase?.('scraping')
   const result = await runScrapeAndAnalyze(input)
 
   onPhase?.('filtering')
-  if (sessionId) await persistRemoteResults(sessionId, result)
-  else await persistGuestResults(result, input.tier)
+  if (sessionId) await persistRemoteResults(sessionId, result, input.intent.objective)
+  else await persistGuestResults(result, input.tier, input.intent.objective)
 
   onPhase?.('analyzing')
   onPhase?.('complete')

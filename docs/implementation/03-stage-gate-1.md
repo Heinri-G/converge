@@ -150,7 +150,19 @@ Resume: on mount, load the session's `stage_state` and restore the controller st
 - [ ] Verified at 390px (bottom sheet) and 1440px (inline card); no overflow; tooltips accessible
 - [ ] Catalog rows are public-read (RLS T4), session answers only in `stage_state`
 
+## Implementation notes (built)
+
+- **Generated gate (signed-in sessions):** `generate-gate` Edge Function (`supabase/functions/generate-gate/`) uses the LLM (`LLM_API_KEY`/`LLM_MODEL`, same OpenAI-compatible adapter as sentiment) to read the prompt + parsed intent and return the missing high-impact questions grouped by clarification type. Strict JSON + zod contract (`gate.ts`): ≤2 groups, ≤2 questions per group; `target` maps each answer to a `constraint` (maxPrice/minRating/maxDriveMinutes/availableBy) or `preference` field so the client applies answers deterministically (`src/features/stage-gate/gateAnswers.ts`) — the LLM supplies structure, never logic.
+- **Activation surface:** the gate renders only for signed-in sessions (`/research?session=` — Continue/Refine/Run again from history). Guests stay fully client-side per the guest-first/local rule and use the deterministic fallback; generation failure degrades to the same fallback.
+- **Grouped stage gates:** `GroupSheet.tsx` renders one clarification group per step (desktop inline card, mobile bottom sheet), progress dots count groups, Fast Track is available every step. The generated gate + answers persist in `stage_state` (`generatedGate` + `answers`) so resume restores it without regenerating.
+- **Intent-aware fallback (`fallback.ts`):** guests/failure path asks a single question only when the prompt has not pinned the objective; otherwise the gate completes immediately and the run form collects the remaining inputs (budget, availability).
+- **Run form (`ResearchRun.tsx`):** objective renders as a confirm chip (Edit reveals the select) instead of a fresh question; a budget input appears for value/cost objectives with no price; the query is built by the pure `buildSearchQuery()` helper in `src/lib/research-intent.ts` (no duplicated availability/country, no shop hints in the raw query).
+- **Intent parsing (`research-intent.ts`):** country/location tokens are stripped from the word-slug (no more `tent-available-purchase`); object keyword maps (`tent|camping`→`tents`, etc.) give clean domains; guest session `title` is the user's topic; the settled objective is persisted in `stage_state` and consumed by synthesis.
+- **Objective-aware synthesis (`engine.ts`):** `SynthesisSource.objective` drives `SCORE_WEIGHTS` + price-band preference (value/cost up-weights price and favors low band; quality up-weights sentiment; closest up-weights proximity). Report title comes from the topic, not the domain slug.
+
 ## Follow-ups
 
 - `05-anti-rabbit-hole` enforces `MAX_DEPTH` in the UI and adds Fast Track.
 - `04-scraping` consumes the finalized `stage_state` (narrowed query + tier) for the candidate pull.
+- Deploy `generate-gate` (needs `LLM_API_KEY`/`LLM_MODEL` secrets, same as `scrape-and-analyze`) and let signed-in users start fresh research sessions in the cloud so the generated gate covers the primary flow, not just resumed history.
+- Scrape adapters should consume gate-derived `intent.preferences` (occupancy, season, …) to narrow Overpass tags / Tavily queries.

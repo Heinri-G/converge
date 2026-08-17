@@ -10,6 +10,7 @@ import {
   saveReport,
 } from '@/lib/db'
 import { readGuestSession } from '@/lib/offline'
+import { isResearchObjective } from '@/lib/research-intent'
 import type { AnalysisDraft, CandidateDraft, ReportDraft, ResearchTier } from '@/lib/types'
 import { synthesize } from './engine'
 import { ComparisonMatrix } from './ComparisonMatrix'
@@ -272,7 +273,18 @@ async function loadGuestReport(): Promise<LoadedReport | null> {
 
   const analysis = toAnalysisRecord(guest.analysis ?? [])
   const tier = guest.tier ?? 'entry_espresso'
-  const report = synthesize({ title: formatTitle(guest.session.domain_slug), tier }, candidates, analysis)
+  const objective = isResearchObjective(guest.session.stage_state.objective)
+    ? guest.session.stage_state.objective
+    : undefined
+  const report = synthesize(
+    {
+      title: guest.session.title || formatTitle(guest.session.domain_slug),
+      tier,
+      ...(objective ? { objective } : {}),
+    },
+    candidates,
+    analysis,
+  )
   return { report, reportId: null, saved: false }
 }
 
@@ -289,8 +301,15 @@ async function loadSignedInReport(sessionId: string): Promise<LoadedReport | nul
 
   const analyses = await loadSessionAnalyses(sessionId)
   const tier: ResearchTier = session.stage_state.fastTracked ? 'broad' : 'entry_espresso'
+  const objective = isResearchObjective(session.stage_state.objective)
+    ? session.stage_state.objective
+    : undefined
   const report = synthesize(
-    { title: session.title || formatTitle(session.domain_slug), tier },
+    {
+      title: session.title || formatTitle(session.domain_slug),
+      tier,
+      ...(objective ? { objective } : {}),
+    },
     candidates,
     analyses,
   )

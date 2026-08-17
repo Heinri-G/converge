@@ -8,6 +8,8 @@ export class LlmProviderError extends Error {
   }
 }
 
+const LLM_TIMEOUT_MS = 30_000
+
 const listItemSchema = z.string().min(1).max(500)
 const listSchema = z.array(listItemSchema).max(20)
 
@@ -49,41 +51,52 @@ export function createSentimentAdapter(config: SentimentAdapterConfig): Sentimen
 
   return {
     async analyze(listing, context) {
-      const response = await fetch(`${baseUrl}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${config.apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: config.model,
-          temperature: 0,
-          response_format: { type: 'json_object' },
-          messages: [
-            { role: 'system', content: SYSTEM_PROMPT },
-            { role: 'user', content: buildUserPrompt(listing, context) },
-          ],
-        }),
-      })
-      if (!response.ok) throw new LlmProviderError(`http_${response.status}`)
-
-      const parsed = (await response.json()) as {
-        choices?: Array<{ message?: { content?: string } }>
-      }
-      const content = parsed.choices?.[0]?.message?.content
-      if (typeof content !== 'string' || !content.trim()) throw new LlmProviderError('empty_response')
-
-      let json: unknown
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), LLM_TIMEOUT_MS)
       try {
-        json = JSON.parse(content)
-      } catch {
-        throw new LlmProviderError('invalid_json')
+        const response = await fetch(`${baseUrl}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${config.apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: config.model,
+            temperature: 0,
+            response_format: { type: 'json_object' },
+            messages: [
+              { role: 'system', content: SYSTEM_PROMPT },
+              { role: 'user', content: buildUserPrompt(listing, context) },
+            ],
+          }),
+          signal: controller.signal,
+        })
+        if (!response.ok) throw new LlmProviderError(`http_${response.status}`)
+
+        const parsed = (await response.json()) as {
+          choices?: Array<{ message?: { content?: string } }>
+        }
+        const content = parsed.choices?.[0]?.message?.content
+        if (typeof content !== 'string' || !content.trim())
+          throw new LlmProviderError('empty_response')
+
+        let json: unknown
+        try {
+          json = JSON.parse(content)
+        } catch {
+          throw new LlmProviderError('invalid_json')
+        }
+
+        const result = analysisSchema.safeParse(json)
+        if (!result.success) throw new LlmProviderError('invalid_shape')
+
+        return result.data
+      } catch (error) {
+        if (error instanceof LlmProviderError) throw error
+        throw new LlmProviderError('timeout')
+      } finally {
+        clearTimeout(timer)
       }
-
-      const result = analysisSchema.safeParse(json)
-      if (!result.success) throw new LlmProviderError('invalid_shape')
-
-      return result.data
     },
   }
 }

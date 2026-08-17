@@ -189,4 +189,48 @@ describe('synthesis engine', () => {
     expect(score).toBeLessThanOrEqual(1)
     expect(matrix[0]!.compositeScore).toBe(score)
   })
+
+  it('favors cheaper options for a value objective', () => {
+    const candidates = [
+      candidate('cheap', { price: 150, rating: 3.8, geo: { lat: 0, lng: 0 } }),
+      candidate('premium', { price: 950, rating: 4.9, geo: { lat: 0, lng: 0 } }),
+    ]
+    const analyses = {
+      cheap: analysis('cheap', { sentimentScore: 0.3, pros: ['p1', 'p2'], cons: ['c1'] }),
+      premium: analysis('premium', { sentimentScore: 0.9, pros: ['p1', 'p2'], cons: ['c1'] }),
+    }
+
+    const valueScore = rankScore(candidates[0]!, analyses.cheap, 'best_value')!
+    const defaultScore = rankScore(candidates[0]!, analyses.cheap)!
+
+    expect(valueScore).toBeGreaterThan(rankScore(candidates[1]!, analyses.premium, 'best_value')!)
+    expect(defaultScore).toBeLessThan(rankScore(candidates[1]!, analyses.premium)!)
+  })
+
+  it('lets the objective steer the top-3 ordering', () => {
+    const candidates = [
+      candidate('cheap', { price: 150, rating: 3.8 }),
+      candidate('premium', { price: 950, rating: 4.9 }),
+      candidate('mid', { price: 450, rating: 4.2 }),
+    ]
+    const analyses = {
+      cheap: analysis('cheap', { sentimentScore: 0.3 }),
+      premium: analysis('premium', { sentimentScore: 0.9 }),
+      mid: analysis('mid', { sentimentScore: 0.6 }),
+    }
+
+    const valueReport = synthesize(
+      { ...source, objective: 'best_value' },
+      candidates,
+      analyses,
+    )
+    const qualityReport = synthesize(
+      { ...source, objective: 'highest_quality' },
+      candidates,
+      analyses,
+    )
+
+    expect(valueReport.top_3[0]!.candidateId).toBe('cheap')
+    expect(qualityReport.top_3[0]!.candidateId).toBe('premium')
+  })
 })

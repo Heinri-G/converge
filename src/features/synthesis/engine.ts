@@ -7,17 +7,44 @@ import type {
   ReportDraft,
   ResearchTier,
 } from '@/lib/types'
+import type { ResearchObjective } from '@/lib/research-intent'
 
-const SCORE_WEIGHTS = {
+export interface ScoreWeights {
+  sentiment: number
+  proximity: number
+  coverage: number
+  price: number
+}
+
+const BASE_WEIGHTS: ScoreWeights = {
   sentiment: 0.5,
   proximity: 0.2,
   coverage: 0.2,
   price: 0.1,
-} as const
+}
+
+const OBJECTIVE_WEIGHTS: Record<ResearchObjective, ScoreWeights> = {
+  best_overall: BASE_WEIGHTS,
+  best_value: { sentiment: 0.3, proximity: 0.1, coverage: 0.2, price: 0.4 },
+  lowest_cost: { sentiment: 0.3, proximity: 0.1, coverage: 0.2, price: 0.4 },
+  highest_quality: { sentiment: 0.65, proximity: 0.05, coverage: 0.25, price: 0.05 },
+  closest: { sentiment: 0.3, proximity: 0.6, coverage: 0.1, price: 0 },
+  lowest_risk: BASE_WEIGHTS,
+}
 
 const PRICE_BAND_THRESHOLDS = { low: 300, high: 800 } as const
-const PRICE_BAND_SCORE = { low: 0.5, mid: 1, high: 0.5 } as const
+type PriceBandScore = Record<'low' | 'mid' | 'high', number>
+const DEFAULT_PRICE_SCORE: PriceBandScore = { low: 0.5, mid: 1, high: 0.5 }
+const VALUE_PRICE_SCORE: PriceBandScore = { low: 1, mid: 0.6, high: 0.2 }
 const PRICE_NEUTRAL_SCORE = 0.5
+const OBJECTIVE_PRICE_SCORE: Record<ResearchObjective, PriceBandScore> = {
+  best_overall: DEFAULT_PRICE_SCORE,
+  best_value: VALUE_PRICE_SCORE,
+  lowest_cost: VALUE_PRICE_SCORE,
+  highest_quality: DEFAULT_PRICE_SCORE,
+  closest: DEFAULT_PRICE_SCORE,
+  lowest_risk: DEFAULT_PRICE_SCORE,
+}
 const EVIDENCE_TARGET = 6
 const PROXIMITY_CAP_MINUTES = 60
 const PROXIMITY_NEUTRAL = 0.5
@@ -30,6 +57,7 @@ const OVERHYPED_MIN_CONS = 3
 export interface SynthesisSource {
   title: string
   tier: ResearchTier
+  objective?: ResearchObjective
 }
 
 export function sentiment01(sentimentScore: number): number {
@@ -48,6 +76,12 @@ export function proximityScore(driveMinutes: number | null): number {
   return Math.max(0, 1 - Math.min(driveMinutes, PROXIMITY_CAP_MINUTES) / PROXIMITY_CAP_MINUTES)
 }
 
+function priceScoreFor(objective: ResearchObjective, band: MatrixRow['priceBand']): number {
+  if (band === null) return PRICE_NEUTRAL_SCORE
+  const table = OBJECTIVE_PRICE_SCORE[objective] ?? DEFAULT_PRICE_SCORE
+  return table[band]
+}
+
 export function coverageScore(analysis: AnalysisDraft): number {
   const evidence = analysis.pros.length + analysis.cons.length + analysis.defects.length
   return Math.min(1, evidence / EVIDENCE_TARGET)
@@ -56,39 +90,46 @@ export function coverageScore(analysis: AnalysisDraft): number {
 export function rankScore(
   candidate: CandidateDraft,
   analysis: AnalysisDraft | null,
+  objective: ResearchObjective = 'best_overall',
 ): number | null {
   if (!analysis) return null
-  const band = priceBand(candidate.price)
-  const priceScore = band === null ? PRICE_NEUTRAL_SCORE : PRICE_BAND_SCORE[band]
+  const weights = OBJECTIVE_WEIGHTS[objective] ?? BASE_WEIGHTS
   return (
-    SCORE_WEIGHTS.sentiment * sentiment01(analysis.sentimentScore) +
-    SCORE_WEIGHTS.proximity * proximityScore(candidate.geo.driveMinutes ?? null) +
-    SCORE_WEIGHTS.coverage * coverageScore(analysis) +
-    SCORE_WEIGHTS.price * priceScore
+    weights.sentiment * sentiment01(analysis.sentimentScore) +
+    weights.proximity * proximityScore(candidate.geo.driveMinutes ?? null) +
+    weights.coverage * coverageScore(analysis) +
+    weights.price * priceScoreFor(objective, priceBand(candidate.price))
   )
 }
 
-function strongestReason(row: MatrixRow, analysis: AnalysisDraft): string {
-  const band = row.priceBand
+function strongestReason(
+  row: MatrixRow,
+  analysis: AnalysisDraft,
+  objective: ResearchObjective,
+): string {
+  const weights = OBJECTIVE_WEIGHTS[objective] ?? BASE_WEIGHTS
   const dimensions = [
     {
-      score: SCORE_WEIGHTS.sentiment * sentiment01(analysis.sentimentScore),
+      score: weights.sentiment * sentiment01(analysis.sentimentScore),
       text: `strongest sentiment (${analysis.sentimentScore.toFixed(1)} on a -1..1 scale)`,
     },
     {
-      score: SCORE_WEIGHTS.proximity * proximityScore(row.driveMinutes),
+      score: weights.proximity * proximityScore(row.driveMinutes),
       text:
         row.driveMinutes === null
           ? 'balanced proximity'
           : `closest option (${row.driveMinutes} min away)`,
     },
     {
-      score: SCORE_WEIGHTS.coverage * coverageScore(analysis),
+      score: weights.coverage * coverageScore(analysis),
       text: `deepest consensus (${analysis.pros.length + analysis.cons.length + analysis.defects.length} evidence points)`,
     },
     {
-      score: SCORE_WEIGHTS.price * (band === null ? PRICE_NEUTRAL_SCORE : PRICE_BAND_SCORE[band]),
-      text: band === null ? 'neutral price position' : `preferred price band (${band})`,
+      score: weights.price * priceScoreFor(objective, row.priceBand),
+      text:
+        row.priceBand === null
+          ? 'neutral price position'
+          : `preferred price band (${row.priceBand})`,
     },
   ]
   return dimensions.reduce((best, current) => (current.score > best.score ? current : best)).text
@@ -98,6 +139,7 @@ function buildTop3(
   matrix: MatrixRow[],
   analysis: Record<string, AnalysisDraft | null>,
   antiPickIds: Set<string>,
+  objective: ResearchObjective,
 ): RankedOption[] {
   const ranked = matrix
     .filter((row): row is MatrixRow & { compositeScore: number } => row.compositeScore !== null)
@@ -116,7 +158,7 @@ function buildTop3(
       candidateId: row.candidateId,
       name: row.name,
       rank: index + 1,
-      reason: `${strongestReason(row, candidateAnalysis)}${
+      reason: `${strongestReason(row, candidateAnalysis, objective)}${
         tension ? ' — also flags a risk below; weigh it before committing.' : ''
       }`,
     }
@@ -167,6 +209,7 @@ export function synthesize(
   candidates: CandidateDraft[],
   analysis: Record<string, AnalysisDraft | null>,
 ): ReportDraft {
+  const objective = source.objective ?? 'best_overall'
   const matrix: MatrixRow[] = candidates.map((candidate) => {
     const candidateAnalysis = analysis[candidate.id] ?? null
     return {
@@ -181,13 +224,13 @@ export function synthesize(
       prosCount: candidateAnalysis?.pros.length ?? 0,
       consCount: candidateAnalysis?.cons.length ?? 0,
       defectsCount: candidateAnalysis?.defects.length ?? 0,
-      compositeScore: rankScore(candidate, candidateAnalysis),
+      compositeScore: rankScore(candidate, candidateAnalysis, objective),
     }
   })
 
   const antiPicksRaw = buildAntiPicks(candidates, analysis)
   const antiPickIds = new Set(antiPicksRaw.map((pick) => pick.candidateId))
-  const top3 = buildTop3(matrix, analysis, antiPickIds)
+  const top3 = buildTop3(matrix, analysis, antiPickIds, objective)
   const top3Ids = new Set(top3.map((option) => option.candidateId))
   const antiPicks = antiPicksRaw.filter((pick) => !top3Ids.has(pick.candidateId))
 

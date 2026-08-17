@@ -133,6 +133,34 @@ export interface GateState extends Record<string, unknown> {
   fastTracked?: boolean
 }
 
+export type GateTargetKind = 'constraint' | 'preference'
+
+export interface GateTarget {
+  kind: GateTargetKind
+  field: string
+  valueType: 'number' | 'string' | 'boolean'
+}
+
+export interface GeneratedGateQuestion {
+  id: string
+  prompt: string
+  tooltip: string
+  answerType: 'single' | 'boolean'
+  options: GateOption[]
+  target: GateTarget
+}
+
+export interface GeneratedGateGroup {
+  id: string
+  title: string
+  rationale: string
+  questions: GeneratedGateQuestion[]
+}
+
+export interface GeneratedGate {
+  groups: GeneratedGateGroup[]
+}
+
 export type ResearchTier = 'broad' | Tier
 
 export interface GeoPoint {

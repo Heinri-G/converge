@@ -11,6 +11,8 @@ const DEFAULT_NOMINATIM_ENDPOINT = 'https://nominatim.openstreetmap.org'
 const DEFAULT_OSRM_ENDPOINT = 'https://router.project-osrm.org'
 const DEFAULT_USER_AGENT = 'ConvergeResearch/0.1 (local research app; dev only)'
 const NOMINATIM_MIN_INTERVAL_MS = 1100
+const NOMINATIM_TIMEOUT_MS = 10_000
+const OSRM_TIMEOUT_MS = 8_000
 
 interface NominatimResult {
   lat?: string
@@ -46,32 +48,54 @@ export function createGeoAdapter(options: GeoAdapterOptions = {}): GeoAdapter {
       lastResolveAt = Date.now()
 
       const url = `${nominatimEndpoint}/search?format=jsonv2&limit=1&q=${encodeURIComponent(address)}`
-      const response = await fetch(url, { headers: { 'User-Agent': userAgent } })
-      if (!response.ok) throw new GeoProviderError('nominatim', `http_${response.status}`)
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), NOMINATIM_TIMEOUT_MS)
+      try {
+        const response = await fetch(url, {
+          headers: { 'User-Agent': userAgent },
+          signal: controller.signal,
+        })
+        if (!response.ok) throw new GeoProviderError('nominatim', `http_${response.status}`)
 
-      const body = (await response.json()) as NominatimResult[]
-      const first = body[0]
-      if (!first) throw new GeoProviderError('nominatim', 'no_result')
+        const body = (await response.json()) as NominatimResult[]
+        const first = body[0]
+        if (!first) throw new GeoProviderError('nominatim', 'no_result')
 
-      const lat = toCoord(first.lat)
-      const lng = toCoord(first.lon)
-      if (lat === null || lng === null) throw new GeoProviderError('nominatim', 'invalid_coordinates')
+        const lat = toCoord(first.lat)
+        const lng = toCoord(first.lon)
+        if (lat === null || lng === null)
+          throw new GeoProviderError('nominatim', 'invalid_coordinates')
 
-      return { lat, lng }
+        return { lat, lng }
+      } catch (error) {
+        if (error instanceof GeoProviderError) throw error
+        throw new GeoProviderError('nominatim', 'timeout')
+      } finally {
+        clearTimeout(timer)
+      }
     },
 
     async driveMinutes(from: GeoPoint, to: GeoPoint) {
       const url = `${osrmEndpoint}/route/v1/driving/${from.lng},${from.lat};${to.lng},${to.lat}?overview=false`
-      const response = await fetch(url)
-      if (!response.ok) throw new GeoProviderError('osrm', `http_${response.status}`)
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), OSRM_TIMEOUT_MS)
+      try {
+        const response = await fetch(url, { signal: controller.signal })
+        if (!response.ok) throw new GeoProviderError('osrm', `http_${response.status}`)
 
-      const body = (await response.json()) as OsrmResponse
-      const duration = body.code === 'Ok' ? body.routes?.[0]?.duration : undefined
-      if (typeof duration !== 'number' || !Number.isFinite(duration)) {
-        throw new GeoProviderError('osrm', 'no_route')
+        const body = (await response.json()) as OsrmResponse
+        const duration = body.code === 'Ok' ? body.routes?.[0]?.duration : undefined
+        if (typeof duration !== 'number' || !Number.isFinite(duration)) {
+          throw new GeoProviderError('osrm', 'no_route')
+        }
+
+        return Math.ceil(duration / 60)
+      } catch (error) {
+        if (error instanceof GeoProviderError) throw error
+        throw new GeoProviderError('osrm', 'timeout')
+      } finally {
+        clearTimeout(timer)
       }
-
-      return Math.ceil(duration / 60)
     },
   }
 }
