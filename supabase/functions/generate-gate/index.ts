@@ -1,4 +1,5 @@
 import { createGateAdapter } from './gate.ts'
+import type { CatalogAttribute } from './gate.ts'
 
 declare const Deno: {
   env: { get(name: string): string | undefined }
@@ -39,6 +40,35 @@ interface ValidatedBody {
     hardConstraints: Record<string, unknown>
     preferences: Record<string, unknown>
   }
+  catalog?: CatalogAttribute[]
+  answered?: string[]
+}
+
+function isCatalogAttribute(value: unknown): value is CatalogAttribute {
+  if (!isRecord(value)) return false
+  const target = value.target
+  return (
+    typeof value.slug === 'string' &&
+    value.slug.length > 0 &&
+    value.slug.length <= 100 &&
+    typeof value.label === 'string' &&
+    typeof value.prompt === 'string' &&
+    typeof value.tooltip === 'string' &&
+    (value.answerType === 'single' || value.answerType === 'boolean') &&
+    Array.isArray(value.options) &&
+    value.options.every(
+      (option) =>
+        isRecord(option) &&
+        typeof option.value === 'string' &&
+        typeof option.label === 'string',
+    ) &&
+    isRecord(target) &&
+    (target.kind === 'constraint' || target.kind === 'preference') &&
+    typeof target.field === 'string' &&
+    (target.valueType === 'number' ||
+      target.valueType === 'string' ||
+      target.valueType === 'boolean')
+  )
 }
 
 function validateRequestBody(input: unknown): ValidatedBody {
@@ -58,6 +88,30 @@ function validateRequestBody(input: unknown): ValidatedBody {
   if (!isRecord(intent.hardConstraints)) throw new Error('intent_constraints_invalid')
   if (!isRecord(intent.preferences)) throw new Error('intent_preferences_invalid')
 
+  let catalog: CatalogAttribute[] | undefined
+  if (input.catalog !== undefined) {
+    if (
+      !Array.isArray(input.catalog) ||
+      input.catalog.length > 50 ||
+      !input.catalog.every(isCatalogAttribute)
+    ) {
+      throw new Error('catalog_invalid')
+    }
+    catalog = input.catalog
+  }
+
+  let answered: string[] | undefined
+  if (input.answered !== undefined) {
+    if (
+      !Array.isArray(input.answered) ||
+      input.answered.length > 50 ||
+      !input.answered.every((slug) => typeof slug === 'string' && slug.length <= 100)
+    ) {
+      throw new Error('answered_invalid')
+    }
+    answered = input.answered
+  }
+
   return {
     topic,
     domainSlug,
@@ -66,6 +120,8 @@ function validateRequestBody(input: unknown): ValidatedBody {
       hardConstraints: intent.hardConstraints,
       preferences: intent.preferences,
     },
+    ...(catalog === undefined ? {} : { catalog }),
+    ...(answered === undefined ? {} : { answered }),
   }
 }
 

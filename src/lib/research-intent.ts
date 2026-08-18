@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import type { DomainAttribute, SpecAttribute } from './types'
 
 export type SearchContext = 'place' | 'product'
 
@@ -384,6 +385,71 @@ const SKIPPED_PREFERENCE_KEYS = new Set([
   'shippingCountry',
   'budgetFocused',
 ])
+
+export const RESERVED_PREFERENCE_KEYS = SKIPPED_PREFERENCE_KEYS
+
+/** Derives the spec-extraction schema from the settled preferences (gate answers + detected). */
+export function specAttributesFromPreferences(
+  preferences: Record<string, string | number | boolean>,
+): SpecAttribute[] {
+  return Object.entries(preferences)
+    .filter(([key]) => !RESERVED_PREFERENCE_KEYS.has(key))
+    .map(([slug, value]) => ({
+      slug,
+      label: slug.split('_').join(' '),
+      valueType:
+        typeof value === 'number' ? 'number' : typeof value === 'boolean' ? 'boolean' : 'string',
+    }))
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function promptMentions(normalized: string, keyword: string): boolean {
+  const term = keyword.toLowerCase().trim()
+  if (!term) return false
+  if (/\s/.test(term)) return normalized.includes(term)
+  const escaped = escapeRegExp(term)
+  return new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`).test(normalized)
+}
+
+/** Slugs of catalog attributes already stated in the prompt, so the gate skips them. */
+export function detectAnsweredAttributeSlugs(
+  prompt: string,
+  attributes: DomainAttribute[],
+): Set<string> {
+  const normalized = prompt.toLowerCase()
+  const slugs = new Set<string>()
+  for (const attribute of attributes) {
+    if (attribute.keywords.some((keyword) => promptMentions(normalized, keyword))) {
+      slugs.add(attribute.slug)
+    }
+  }
+  return slugs
+}
+
+/** Detected values for already-stated attributes (booleans => true, singles => matched term). */
+export function answeredAttributeValues(
+  prompt: string,
+  attributes: DomainAttribute[],
+): Record<string, string | boolean> {
+  const normalized = prompt.toLowerCase()
+  const values: Record<string, string | boolean> = {}
+  for (const attribute of attributes) {
+    const matched = attribute.keywords.find((keyword) => promptMentions(normalized, keyword))
+    if (!matched) continue
+    if (attribute.target.valueType === 'boolean') {
+      values[attribute.slug] = true
+    } else {
+      const capture = normalized.match(
+        new RegExp(`\\d+\\s*${escapeRegExp(matched.toLowerCase().trim())}`),
+      )
+      values[attribute.slug] = capture?.[0].trim() ?? matched.trim()
+    }
+  }
+  return values
+}
 
 export function preferenceKeywords(
   preferences: Record<string, string | number | boolean>,

@@ -16,6 +16,13 @@ export interface RequestBody {
   radiusMinutes?: number
   tier: ResearchTier
   maxResults: number
+  specAttributes?: SpecAttribute[]
+}
+
+export interface SpecAttribute {
+  slug: string
+  label: string
+  valueType: 'number' | 'string' | 'boolean'
 }
 
 export interface ResearchIntent {
@@ -88,10 +95,19 @@ export interface SentimentAdapter {
   analyze(listing: RawListing, context: { query: string; domainSlug: string }): Promise<unknown>
 }
 
+export interface SpecsAdapter {
+  extract(
+    listing: RawListing,
+    attributes: SpecAttribute[],
+    context: { query: string; domainSlug: string },
+  ): Promise<Record<string, string | number | boolean> | null>
+}
+
 export interface PipelineDependencies {
   geo: GeoAdapter
   sources: SourceAdapter[]
   sentiment: SentimentAdapter
+  specs?: SpecsAdapter
   model: string
 }
 
@@ -212,6 +228,29 @@ export function validateRequestBody(input: unknown): RequestBody {
     throw new Error('max_results_invalid')
   }
 
+  let specAttributes: SpecAttribute[] | undefined
+  if (input.specAttributes !== undefined) {
+    if (
+      !Array.isArray(input.specAttributes) ||
+      input.specAttributes.length > 20 ||
+      !input.specAttributes.every(
+        (attribute) =>
+          isRecord(attribute) &&
+          typeof attribute.slug === 'string' &&
+          attribute.slug.length > 0 &&
+          attribute.slug.length <= 100 &&
+          typeof attribute.label === 'string' &&
+          attribute.label.length <= 120 &&
+          (attribute.valueType === 'number' ||
+            attribute.valueType === 'string' ||
+            attribute.valueType === 'boolean'),
+      )
+    ) {
+      throw new Error('spec_attributes_invalid')
+    }
+    specAttributes = input.specAttributes
+  }
+
   if (!isTier(input.tier)) throw new Error('tier_invalid')
 
   const geoInput = input.geo ?? intent.location
@@ -221,8 +260,18 @@ export function validateRequestBody(input: unknown): RequestBody {
     throw new Error('geo_location_required_for_radius')
   }
 
+  const specAttributesParam =
+    specAttributes === undefined ? {} : { specAttributes }
+
   if (geoInput === undefined) {
-    return { query, domainSlug, intent, tier: input.tier, maxResults }
+    return {
+      query,
+      domainSlug,
+      intent,
+      tier: input.tier,
+      maxResults,
+      ...specAttributesParam,
+    }
   }
 
   const address = typeof geoInput.address === 'string' ? geoInput.address.trim() : ''
@@ -254,6 +303,7 @@ export function validateRequestBody(input: unknown): RequestBody {
     ...(requestedRadius === undefined ? {} : { radiusMinutes: requestedRadius }),
     tier: input.tier,
     maxResults,
+    ...specAttributesParam,
   }
 }
 
@@ -550,6 +600,29 @@ export async function runPipeline(
       }
     }),
   )
+
+  const specAttributes = request.specAttributes ?? []
+  if (specAttributes.length > 0 && dependencies.specs) {
+    const specsByIndex: Record<number, Record<string, string | number | boolean>> = {}
+    await Promise.all(
+      accepted.map(async (item, index) => {
+        try {
+          const specs = await dependencies.specs.extract(
+            item.listing,
+            specAttributes,
+            { query: request.query, domainSlug: request.domainSlug },
+          )
+          if (specs) specsByIndex[index] = specs
+        } catch {
+          // Per-candidate degrade: missing specs just render as 'n/a'.
+        }
+      }),
+    )
+    for (const [index, specs] of Object.entries(specsByIndex)) {
+      const candidate = candidates[Number(index)]
+      if (candidate) candidate.data.specs = specs
+    }
+  }
 
   return { candidates, analysis }
 }

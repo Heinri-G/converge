@@ -1,5 +1,13 @@
 import { supabase } from '@/lib/supabase'
-import type { DomainBranch, GateOption, GateQuestion } from '@/lib/types'
+import { CORE_CATALOG_SLUG } from '@/lib/types'
+import type {
+  DomainAttribute,
+  DomainBranch,
+  DomainCatalog,
+  GateOption,
+  GateQuestion,
+  GateTarget,
+} from '@/lib/types'
 
 interface RawBranch {
   id: string
@@ -51,8 +59,9 @@ function mapQuestion(row: RawQuestion): GateQuestion {
 
 export async function fetchDomainSlugs(): Promise<string[]> {
   const { data, error } = await supabase
-    .from('domain_branches')
+    .from('domain_catalogs')
     .select('domain_slug')
+    .neq('domain_slug', CORE_CATALOG_SLUG)
     .order('domain_slug')
 
   if (error) throw error
@@ -83,4 +92,105 @@ export async function fetchGateQuestions(branchId: string): Promise<GateQuestion
   if (error) throw error
 
   return ((data ?? []) as RawQuestion[]).map(mapQuestion)
+}
+
+interface RawCatalog {
+  id: string
+  domain_slug: string
+  status: DomainCatalog['status']
+  source: DomainCatalog['source']
+}
+
+interface RawAttribute {
+  id: string
+  catalog_id: string
+  slug: string
+  label: string
+  prompt: string
+  tooltip: string
+  answer_type: DomainAttribute['answerType']
+  options: GateOption[]
+  keywords: string[]
+  priority: number
+  ordering: number
+  target_kind: GateTarget['kind']
+  target_field: string
+  target_value_type: GateTarget['valueType']
+}
+
+function mapAttribute(row: RawAttribute): DomainAttribute {
+  return {
+    id: row.id,
+    slug: row.slug,
+    label: row.label,
+    prompt: row.prompt,
+    tooltip: row.tooltip,
+    answerType: row.answer_type,
+    options: Array.isArray(row.options) ? row.options : [],
+    keywords: Array.isArray(row.keywords) ? row.keywords : [],
+    priority: row.priority,
+    ordering: row.ordering,
+    target: {
+      kind: row.target_kind,
+      field: row.target_field,
+      valueType: row.target_value_type,
+    },
+  }
+}
+
+export interface DomainCatalogData {
+  catalog: DomainCatalog | null
+  attributes: DomainAttribute[]
+  coreAttributes: DomainAttribute[]
+}
+
+export async function fetchCatalog(domainSlug: string): Promise<DomainCatalogData> {
+  const { data: catalogRows, error: catalogError } = await supabase
+    .from('domain_catalogs')
+    .select('id, domain_slug, status, source')
+    .in('domain_slug', [domainSlug, CORE_CATALOG_SLUG])
+
+  if (catalogError) throw catalogError
+
+  const rawCatalogs = (catalogRows ?? []) as RawCatalog[]
+  const domainCatalog =
+    rawCatalogs.find((row) => row.domain_slug === domainSlug) ?? null
+  const coreCatalog = rawCatalogs.find((row) => row.domain_slug === CORE_CATALOG_SLUG) ?? null
+  const mapCatalog = (row: RawCatalog): DomainCatalog => ({
+    id: row.id,
+    domainSlug: row.domain_slug,
+    status: row.status,
+    source: row.source,
+  })
+
+  const catalogIds = [domainCatalog?.id, coreCatalog?.id].filter(
+    (id): id is string => typeof id === 'string',
+  )
+  if (catalogIds.length === 0) {
+    return { catalog: domainCatalog ? mapCatalog(domainCatalog) : null, attributes: [], coreAttributes: [] }
+  }
+
+  const { data: attrRows, error: attrError } = await supabase
+    .from('domain_attributes')
+    .select(
+      'id, catalog_id, slug, label, prompt, tooltip, answer_type, options, keywords, priority, ordering, target_kind, target_field, target_value_type',
+    )
+    .in('catalog_id', catalogIds)
+    .order('priority', { ascending: true })
+    .order('ordering', { ascending: true })
+
+  if (attrError) throw attrError
+
+  const attributes = ((attrRows ?? []) as RawAttribute[])
+    .filter((row) => row.catalog_id === domainCatalog?.id)
+    .map(mapAttribute)
+  const coreAttributes = ((attrRows ?? []) as RawAttribute[])
+    .filter((row) => row.catalog_id === coreCatalog?.id)
+    .map(mapAttribute)
+
+  return {
+    catalog: domainCatalog ? mapCatalog(domainCatalog) : null,
+    attributes,
+    coreAttributes,
+  }
 }

@@ -7,6 +7,7 @@ import {
 import { createGeoAdapter } from './geo.ts'
 import { createOverpassSource, createTavilySource } from './sources.ts'
 import { createSentimentAdapter } from './sentiment.ts'
+import { createSpecsAdapter } from './specs.ts'
 
 declare const Deno: {
   env: { get(name: string): string | undefined }
@@ -36,6 +37,11 @@ function buildDependencies(request: RequestBody): PipelineDependencies {
     geo: createGeoAdapter(),
     sources,
     sentiment: createSentimentAdapter({
+      apiKey: Deno.env.get('LLM_API_KEY') ?? '',
+      baseUrl: Deno.env.get('LLM_BASE_URL') ?? DEFAULT_LLM_BASE_URL,
+      model,
+    }),
+    specs: createSpecsAdapter({
       apiKey: Deno.env.get('LLM_API_KEY') ?? '',
       baseUrl: Deno.env.get('LLM_BASE_URL') ?? DEFAULT_LLM_BASE_URL,
       model,

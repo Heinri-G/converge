@@ -10,6 +10,7 @@ import {
   localShopHint,
   objectiveLabel,
   SHIPPING_COUNTRY_CODES,
+  specAttributesFromPreferences,
   type ResearchIntent,
   type ResearchObjective,
   type SearchContext,
@@ -136,6 +137,7 @@ export function ResearchRun({ domainSlug, tier, intent, sessionId }: ResearchRun
       intent: { ...intent, objective, hardConstraints },
       tier,
       maxResults: 10,
+      specAttributes: specAttributesFromPreferences(intent.preferences),
     }
     if (useGeo) {
       input.geo = { address: address.trim() }

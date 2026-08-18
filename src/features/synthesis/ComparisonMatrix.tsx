@@ -24,6 +24,16 @@ function bandLabel(band: MatrixRow['priceBand']): string {
   return band
 }
 
+function specLabel(key: string): string {
+  return key.split('_').join(' ')
+}
+
+function specValue(value: string | number | boolean | null): string {
+  if (value === null) return 'n/a'
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No'
+  return String(value)
+}
+
 function RowLine({
   label,
   value,
@@ -74,6 +84,9 @@ function MatrixCard({ row }: { row: MatrixRow }) {
         <RowLine label="Rating" value={ratingLabel(row.rating)} />
         <RowLine label="Sentiment" value={sentimentLabel(row.sentimentScore)} />
         <RowLine label="Price band" value={bandLabel(row.priceBand)} />
+        {Object.entries(row.specs).map(([key, value]) => (
+          <RowLine key={key} label={specLabel(key)} value={specValue(value)} />
+        ))}
         <RowLine
           label="Pros · Cons · Defects"
           value={`${row.prosCount} · ${row.consCount} · ${row.defectsCount}`}
@@ -84,7 +97,19 @@ function MatrixCard({ row }: { row: MatrixRow }) {
   )
 }
 
+function specColumns(rows: MatrixRow[]): string[] {
+  const seen: string[] = []
+  for (const row of rows) {
+    for (const key of Object.keys(row.specs)) {
+      if (!seen.includes(key)) seen.push(key)
+    }
+  }
+  return seen
+}
+
 export function ComparisonMatrix({ rows }: { rows: MatrixRow[] }) {
+  const columns = specColumns(rows)
+
   return (
     <section aria-label="Comparison matrix">
       <div className="md:hidden">
@@ -114,6 +139,11 @@ export function ComparisonMatrix({ rows }: { rows: MatrixRow[] }) {
               <th scope="col" className="py-2 pr-4 font-medium">
                 Price
               </th>
+              {columns.map((key) => (
+                <th key={key} scope="col" className="py-2 pr-4 font-medium">
+                  {specLabel(key)}
+                </th>
+              ))}
               <th scope="col" className="py-2 pr-4 font-medium">
                 P · C · D
               </th>
@@ -143,6 +173,11 @@ export function ComparisonMatrix({ rows }: { rows: MatrixRow[] }) {
                 <td className="py-3 pr-4 align-top font-mono text-xs">
                   {bandLabel(row.priceBand)}
                 </td>
+                {columns.map((key) => (
+                  <td key={key} className="py-3 pr-4 align-top font-mono text-xs">
+                    {specValue(row.specs[key] ?? null)}
+                  </td>
+                ))}
                 <td className="py-3 pr-4 align-top font-mono text-xs">
                   {row.prosCount} · {row.consCount} · {row.defectsCount}
                 </td>

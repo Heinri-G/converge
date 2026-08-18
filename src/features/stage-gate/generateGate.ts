@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase'
-import type { GeneratedGate } from '@/lib/types'
+import type { DomainAttribute, GeneratedGate } from '@/lib/types'
 import type { ResearchIntent } from '@/lib/research-intent'
 
 const GATE_FUNCTION_TIMEOUT_MS = 45_000
@@ -12,6 +12,8 @@ export interface GenerateGateInput {
     hardConstraints: ResearchIntent['hardConstraints']
     preferences: ResearchIntent['preferences']
   }
+  catalog?: DomainAttribute[]
+  answered?: string[]
 }
 
 export async function generateGate(input: GenerateGateInput): Promise<GeneratedGate> {

@@ -14,6 +14,9 @@ const OVERPASS_TIMEOUT_SECONDS = 25
 
 const DOMAIN_OVERPASS_TAGS: Record<string, string[]> = {
   'coffee-espresso': ['amenity=cafe', 'shop=coffee'],
+  restaurants: ['amenity=restaurant'],
+  hotels: ['tourism=hotel'],
+  golf: ['leisure=golf_course'],
 }
 
 interface OverpassElement {

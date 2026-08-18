@@ -21,8 +21,11 @@ Reference for building features. PRODUCT.md is the product source of truth; this
 
 Segments a topic into tiers (Capsule → Manual Filter → Entry Espresso → Prosumer) and surfaces 2–3 high-impact branching questions with ℹ️ tooltips.
 
-- **Content, not code:** tiers, branches, questions, and tooltips live in `domain_branches` / `gate_questions` content tables (seeded), not in JSX. New domains ship as seed data with no deploy.
-- The client-side flow controller renders a branch's questions from the gate tables; a normalized `ResearchIntent` supplies the objective and hard constraints. Unknown domains use a per-session fallback gate until a generated gate is promoted into catalog content.
+- **Content, not code:** decision-critical **attributes** live in `domain_catalogs` / `domain_attributes` content tables (seeded), not in JSX. A `__core__` catalog (budget, minimum rating, availability) applies to every domain; authored rows (coffee-espresso, tents) bootstrap quality.
+- **LLM-first, catalog-grounded:** signed-in sessions get the gate from `generate-gate`, which *selects* the 2–3 highest-impact unanswered attributes from the catalog (it does not improvise when the catalog exists). Guests and LLM failures use a deterministic picker over the same catalog (`catalogPicker`), so the questions are identical — the difference is selection method, not content.
+- **Self-populating:** unknown domains get an LLM-generated gate on first use, which `promote-catalog` persists as a `source = 'generated'` catalog. The next session (guest or signed-in) loads it deterministically. Seeds are a bootstrap, never the ceiling on coverage.
+- The generated gate's attribute slugs define the **spec schema**: `scrape-and-analyze` extracts those fields into `candidate.data.specs`, and the comparison matrix renders them as columns. Gate questions become the comparison columns.
+- Legacy seeded branches (`domain_branches` / `gate_questions`) still render for old session snapshots (resume); new flows route through the catalog.
 
 ### 2. Anti-rabbit-hole controls
 
@@ -78,6 +81,8 @@ Schema is changed via imperative migrations (`supabase migration new <name>`); r
 | `research_sessions` | session header: `owner_id`, `domain_slug`, `title`, `resolution` (`complete`/`fast_tracked`), `stage_state` jsonb snapshot | owner |
 | `domain_branches` | tier/branch catalog (parent self-ref, depth ≤ 2), seed content | public read |
 | `gate_questions` | branching question + prompt + tooltip + options, seed content | public read |
+| `domain_catalogs` | per-domain attribute-catalog header (`__core__` = all domains; `source` authored/generated) | public read + `promote-catalog` writes |
+| `domain_attributes` | decision-critical attribute rows (prompt, tooltip, options, keywords, target mapping) | public read + `promote-catalog` writes |
 | `candidates` | scraped options: source, url, geo jsonb, rating, normalized data | via session ownership |
 | `analysis` | 1:1 per candidate: `sentiment_score`, `pros`/`cons`/`defects` text[], `model` | via session ownership |
 | `reports` | matrix jsonb, `top_3` jsonb, `anti_picks` jsonb | owner + shared readers |
@@ -98,12 +103,14 @@ RLS rules (non-negotiable, from the Supabase skill):
 
 `supabase/functions/` (Deno):
 
-- `scrape-and-analyze/index.ts` — validates input server-side (authoritative), runs source adapters (rate-limited, ToS-aware), normalizes candidates, LLM sentiment extraction, returns `{ candidates, analysis }`. Client persists. Split a `resolve-drive-time` function out when the geo provider is decided.
+- `scrape-and-analyze/index.ts` — validates input server-side (authoritative), runs source adapters (rate-limited, ToS-aware), normalizes candidates, LLM sentiment extraction, LLM spec extraction (`data.specs` keyed by the domain's attribute slugs when `specAttributes` are supplied), returns `{ candidates, analysis }`. Client persists. Split a `resolve-drive-time` function out when the geo provider is decided.
+- `generate-gate/index.ts` — LLM-generated, per-session stage gates grouped by clarification type, zod-validated, cost-capped (≤2 groups, ≤2 questions per group). Accepts the domain's attribute catalog + already-answered slugs and *selects* from them rather than improvising.
+- `promote-catalog/index.ts` — **the one documented exception to "functions never write":** persists a validated generated gate as a `source='generated'` catalog so later sessions and guests reuse it without an LLM call. Anti-spam: the caller must own a research session for the domain (RLS-enforced via the caller JWT). Never overwrites an authored/curated catalog. The client calls it best-effort after a successful generation.
 - Secrets: LLM key + geo key in function env; never reach the client.
 
 ## Agent conventions for feature work
 
-- **New domain/tier/question → seed content rows**, no code change (add to `domain_branches`/`gate_questions`).
+- **New domain → `domain_attributes` seed rows** (authored bootstrap) or let it self-populate via `generate-gate` → `promote-catalog`. **New attribute for an existing domain → `domain_attributes` row**, no code change.
 - **New feature → `src/features/<name>/`** with `api.ts`/`hooks.ts` separating orchestration from presentational components; presentational components never fetch.
 - **Shared types imported from `src/lib/types.ts`**; strict TS, no `any` leakage.
 - **Server-side validation is authoritative**; client validation is UX only. Validate every input inside Edge Functions.

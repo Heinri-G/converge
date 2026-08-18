@@ -204,6 +204,16 @@ function buildAntiPicks(
   return picks
 }
 
+function readSpecs(value: unknown): MatrixRow['specs'] {
+  if (!value || typeof value !== 'object') return {}
+  const specs: MatrixRow['specs'] = {}
+  for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
+    specs[key] =
+      typeof val === 'string' || typeof val === 'number' || typeof val === 'boolean' ? val : null
+  }
+  return specs
+}
+
 export function synthesize(
   source: SynthesisSource,
   candidates: CandidateDraft[],
@@ -225,6 +235,7 @@ export function synthesize(
       consCount: candidateAnalysis?.cons.length ?? 0,
       defectsCount: candidateAnalysis?.defects.length ?? 0,
       compositeScore: rankScore(candidate, candidateAnalysis, objective),
+      specs: readSpecs(candidate.data.specs),
     }
   })
 

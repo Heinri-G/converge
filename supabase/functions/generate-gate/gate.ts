@@ -85,14 +85,29 @@ export function sanitizeGate(value: unknown): GeneratedGate {
   return { groups }
 }
 
-const SYSTEM_PROMPT = `You are the "stage gate" of a research engine. Given a user's research prompt and the parsed intent, decide what important information is still missing and ask for it.
+export interface CatalogAttribute {
+  slug: string
+  label: string
+  prompt: string
+  tooltip: string
+  answerType: 'single' | 'boolean'
+  options: Array<{ value: string; label: string }>
+  target: {
+    kind: 'constraint' | 'preference'
+    field: string
+    valueType: 'number' | 'string' | 'boolean'
+  }
+}
+
+const SYSTEM_PROMPT = `You are the "stage gate" of a research engine. Given a user's research prompt, the parsed intent, and the domain's attribute catalog, decide what important information is still missing and ask for it.
 
 Return ONLY strict JSON with exactly this shape:
 {"groups":[{"id":string,"title":string,"rationale":string,"questions":[{"id":string,"prompt":string,"tooltip":string,"answerType":"single"|"boolean","options":[{"value":string,"label":string}],"target":{"kind":"constraint"|"preference","field":string,"valueType":"number"|"string"|"boolean"}}]}]}
 
 Rules:
-- Only ask for information the prompt or intent does NOT already provide. If the prompt already states it, do not ask.
-- Cover the most important missing variables first. Some are generic (budget ceiling, minimum rating, availability), some are specific to the object being researched (for a tent: size or occupancy, season rating, packability; for a bike: terrain or riding style; for a laptop: primary use case; for coffee equipment: workflow or footprint).
+- Only ask for information the prompt or intent does NOT already provide. An "answered" list of attribute slugs is provided; never ask for those.
+- The attribute catalog lists decision-critical attributes for this domain with a ready-made question (prompt), explanation (tooltip), answer options, and a deterministic target. Choose the 2-3 most decision-critical attributes from the catalog that are still unanswered for THIS specific prompt, and reuse their prompt/tooltip/options/answerType/target verbatim. You may drop an option that is clearly irrelevant to the user's situation, but do not invent new option values.
+- If the catalog is empty or too thin, fill gaps from your own knowledge: generic decision variables (budget ceiling, minimum rating, availability) plus obvious domain-specific ones (for a tent: size or occupancy, season rating, packability; for a bike: terrain or riding style; for a laptop: primary use case; for coffee equipment: workflow or footprint).
 - Group questions by clarification type. Return at most 2 groups and at most 2 questions per group.
 - Prefer "single" choices whose options encode the resolved answer directly (numbers as plain strings, e.g. "150" or "4").
 - For "constraint" targets only use fields: maxPrice, minRating, maxDriveMinutes, availableBy. maxPrice/minRating/maxDriveMinutes must be valueType "number"; availableBy is "string".
@@ -101,7 +116,7 @@ Rules:
 - If nothing important is missing, return {"groups":[]}.
 - Do not include text outside the JSON object.`
 
-function buildUserPrompt(input: {
+export function buildUserPrompt(input: {
   topic: string
   domainSlug: string
   intent: {
@@ -109,11 +124,24 @@ function buildUserPrompt(input: {
     hardConstraints: Record<string, unknown>
     preferences: Record<string, unknown>
   }
+  catalog?: CatalogAttribute[]
+  answered?: string[]
 }): string {
+  const catalogBlock =
+    input.catalog && input.catalog.length > 0
+      ? `\nAvailable attribute catalog (choose from these when they apply):\n${JSON.stringify(input.catalog)}`
+      : ''
+  const answeredBlock =
+    input.answered && input.answered.length > 0
+      ? `\nAlready answered (do NOT ask again): ${input.answered.join(', ')}`
+      : ''
+
   return [
     `User prompt: ${input.topic}`,
     `Domain: ${input.domainSlug}`,
     `Parsed intent: ${JSON.stringify(input.intent)}`,
+    catalogBlock,
+    answeredBlock,
     '',
     'Generate the stage-gate questions for what is still missing.',
   ].join('\n')
@@ -134,6 +162,8 @@ export interface GenerateGateAdapter {
       hardConstraints: Record<string, unknown>
       preferences: Record<string, unknown>
     }
+    catalog?: CatalogAttribute[]
+    answered?: string[]
   }): Promise<GeneratedGate>
 }
 

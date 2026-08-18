@@ -1,16 +1,29 @@
-import { useCallback, useEffect, useEffectEvent, useState } from 'react'
+import { useEffect, useEffectEvent, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { updateSessionResolution, loadResearchSession } from '@/lib/db'
 import { clearGuestSession, readGuestSession, saveGuestSession } from '@/lib/offline'
-import { deriveResearchIntent, displayDomain, type ResearchIntent } from '@/lib/research-intent'
-import type { DomainBranch, GateAnswer, GateState, GeneratedGate, SessionResolution } from '@/lib/types'
+import {
+  deriveResearchIntent,
+  detectAnsweredAttributeSlugs,
+  displayDomain,
+  type ResearchIntent,
+} from '@/lib/research-intent'
+import type {
+  DomainBranch,
+  GateAnswer,
+  GateState,
+  GeneratedGate,
+  SessionResolution,
+} from '@/lib/types'
 import { ResearchRun } from '@/features/research/ResearchRun'
-import { fetchDomainBranches, fetchDomainSlugs, fetchGateQuestions } from './api'
+import { fetchCatalog, fetchDomainBranches, fetchDomainSlugs, fetchGateQuestions } from './api'
 import { createFallbackGate, fallbackObjectiveFromBranch } from './fallback'
 import { clampGateState, MAX_DEPTH, isAtMaxDepth, isComplete, nextBranch } from './flow'
 import { createFastTrackedState } from './fastTrack'
 import { applyGateAnswers, generateGate, parseGeneratedGate } from './generateGate'
+import { createCatalogGate } from './catalogPicker'
+import { promoteCatalog } from './promoteCatalog'
 import { GroupSheet } from './GroupSheet'
 import { QuestionSheet } from './QuestionSheet'
 
@@ -112,30 +125,6 @@ export function GateWizard({
   const [groupIndex, setGroupIndex] = useState(0)
   const [generationState, setGenerationState] = useState<LoadState>('ready')
 
-  const selectPromptDomain = useCallback(() => {
-    const fallback = createFallbackGate(intent)
-    const nextState = fastTrack
-      ? {
-          ...fallback.state,
-          branchPath: [fallback.state.branchPath[0]!, fallback.branches[1]!.id],
-          fastTracked: true,
-        }
-      : fallback.state
-    setSelectedDomain(intent.domain)
-    setBranches(fallback.branches)
-    setActiveBranchId(fallback.branches[0]?.id ?? null)
-    setGateState(nextState)
-    setQuestion(fastTrack ? null : fallback.question)
-    setQuestionState('ready')
-    setComplete(fastTrack || fallback.question === null)
-    setMobileOpen(!fastTrack)
-
-    if (fastTrack || fallback.question === null) {
-      const resolution: SessionResolution = fastTrack ? 'fast_tracked' : 'complete'
-      void persistGuestState(intent.domain, nextState, resolution, intent.topic)
-    }
-  }, [fastTrack, intent])
-
   async function loadDomains() {
     setCatalogState('loading')
     setError(null)
@@ -148,7 +137,7 @@ export function GateWizard({
       if (initialPrompt) {
         setDomains([])
         setCatalogState('ready')
-        selectPromptDomain()
+        void startFromPrompt()
       } else {
         setCatalogState('error')
         setError(
@@ -158,38 +147,106 @@ export function GateWizard({
     }
   }
 
-  async function beginGeneratedGate(baseIntent: ResearchIntent) {
-    setGenerationState('loading')
-    setError(null)
-    try {
-      const gate = await generateGate({
-        topic: baseIntent.topic,
-        domainSlug: baseIntent.domain,
-        intent: {
-          objective: baseIntent.objective,
-          hardConstraints: baseIntent.hardConstraints,
-          preferences: baseIntent.preferences,
-        },
-      })
-      setGeneratedGate(gate)
-      setGenerationState('ready')
-      setGateState({
-        domainSlug: baseIntent.domain,
-        branchPath: [],
-        answers: {},
-        generatedGate: gate,
-      })
-      if (gate.groups.length === 0) {
-        setComplete(true)
-        setMobileOpen(false)
-      } else {
-        setGroupIndex(0)
-        setMobileOpen(true)
-      }
-    } catch {
-      setGenerationState('ready')
-      selectFallbackFromIntent(baseIntent)
+  function applyGate(baseIntent: ResearchIntent, gate: GeneratedGate) {
+    setIntent(baseIntent)
+    setSelectedDomain(baseIntent.domain)
+    setGeneratedGate(gate)
+    setGenerationState('ready')
+    const state: GateState = {
+      domainSlug: baseIntent.domain,
+      branchPath: [],
+      answers: {},
+      generatedGate: gate,
     }
+    setGateState(state)
+
+    if (gate.groups.length === 0) {
+      setComplete(true)
+      setMobileOpen(false)
+      if (fastTrack) {
+        const resolution: SessionResolution = 'fast_tracked'
+        void saveState({ ...state, fastTracked: true }, resolution, baseIntent.topic).catch(
+          () => undefined,
+        )
+      } else {
+        void saveState(state, 'complete', baseIntent.topic).catch(() => undefined)
+      }
+    } else {
+      setGroupIndex(0)
+      setMobileOpen(true)
+    }
+  }
+
+  async function startFromIntent(baseIntent: ResearchIntent) {
+    setCatalogState('loading')
+    setError(null)
+    setSelectedDomain(baseIntent.domain)
+
+    let data: Awaited<ReturnType<typeof fetchCatalog>>
+    try {
+      data = await fetchCatalog(baseIntent.domain)
+    } catch {
+      setCatalogState('ready')
+      selectFallbackFromIntent(baseIntent)
+      return
+    }
+    setCatalogState('ready')
+
+    const allAttributes = [...data.coreAttributes, ...data.attributes]
+    const answered = detectAnsweredAttributeSlugs(baseIntent.topic, allAttributes)
+    const pickerGate = createCatalogGate(allAttributes, answered)
+
+    if (sessionId) {
+      setGenerationState('loading')
+      setMobileOpen(false)
+      try {
+        const gate = await generateGate({
+          topic: baseIntent.topic,
+          domainSlug: baseIntent.domain,
+          intent: {
+            objective: baseIntent.objective,
+            hardConstraints: baseIntent.hardConstraints,
+            preferences: baseIntent.preferences,
+          },
+          catalog: allAttributes,
+          answered: [...answered],
+        })
+        applyGate(baseIntent, gate)
+        if (sessionId) void promoteCatalog(baseIntent.domain, gate)
+      } catch {
+        applyGate(baseIntent, pickerGate)
+      }
+    } else {
+      applyGate(baseIntent, pickerGate)
+    }
+  }
+
+  function startFromPrompt(domainOverride?: string) {
+    const hasPrompt = Boolean(initialPrompt)
+    const baseIntent = domainOverride
+      ? deriveResearchIntent(
+          hasPrompt ? intent.topic : displayDomain(domainOverride),
+          domainOverride,
+          { locale: navigator.language },
+        )
+      : intent
+    if (fastTrack) {
+      const fallback = createFallbackGate(baseIntent)
+      const nextState: GateState = {
+        ...fallback.state,
+        branchPath: [fallback.state.branchPath[0]!, fallback.branches[1]!.id],
+        fastTracked: true,
+      }
+      setSelectedDomain(baseIntent.domain)
+      setGateState(nextState)
+      setComplete(true)
+      setQuestion(null)
+      setQuestionState('ready')
+      setMobileOpen(false)
+      void saveState(nextState, 'fast_tracked', baseIntent.topic).catch(() => undefined)
+      return
+    }
+    void startFromIntent(baseIntent)
   }
 
   function selectFallbackFromIntent(baseIntent: ResearchIntent) {
@@ -266,7 +323,7 @@ export function GateWizard({
     }
 
     if (!root) {
-      await beginGeneratedGate(baseIntent)
+      await startFromIntent(baseIntent)
       return
     }
 
@@ -314,9 +371,9 @@ export function GateWizard({
 
   const resumeFromPrompt = useEffectEvent(async (availableDomains: string[]) => {
     if (availableDomains.includes(intent.domain)) {
-      await selectDomain(intent.domain)
+      void startFromPrompt(intent.domain)
     } else {
-      selectPromptDomain()
+      void startFromPrompt()
     }
   })
 
@@ -347,7 +404,7 @@ export function GateWizard({
         } else if (initialPrompt) {
           setDomains([])
           setCatalogState('ready')
-          selectPromptDomain()
+          void resumeFromPrompt([])
         } else {
           setCatalogState('error')
           setError(
@@ -359,59 +416,23 @@ export function GateWizard({
     return () => {
       active = false
     }
-  }, [fastTrack, initialPrompt, selectPromptDomain, sessionId])
+  }, [fastTrack, initialPrompt, sessionId])
 
   async function selectDomain(domainSlug: string) {
-    setIntent((current) =>
-      current.domain === domainSlug
-        ? current
-        : deriveResearchIntent(current.topic, domainSlug, { locale: navigator.language }),
-    )
-    setSelectedDomain(domainSlug)
-    setQuestionState('loading')
-    setError(null)
-    setComplete(false)
-    setMobileOpen(true)
-
-    try {
-      const loadedBranches = await fetchDomainBranches(domainSlug)
-      const root = loadedBranches.find((branch) => branch.parentId === null)
-      if (!root) throw new Error('Domain has no root branch')
-
-      const rootQuestions = await fetchGateQuestions(root.id)
-      const fastTrackBranch = loadedBranches[1] ?? root
-      const nextState: GateState = fastTrack
-        ? { domainSlug, branchPath: [root.id, fastTrackBranch.id], answers: {}, fastTracked: true }
-        : { domainSlug, branchPath: [], answers: {} }
-      setBranches(loadedBranches)
-      setActiveBranchId(fastTrack ? fastTrackBranch.id : root.id)
-      setGateState(nextState)
-      setQuestion(fastTrack ? null : (rootQuestions[0] ?? null))
-      setComplete(fastTrack)
-      setMobileOpen(!fastTrack)
-      setQuestionState(fastTrack || rootQuestions.length > 0 ? 'ready' : 'error')
-      if (!fastTrack && rootQuestions.length === 0) {
-        setError('This domain has no gate questions yet.')
-      }
-      if (fastTrack) {
-        void persistGuestState(domainSlug, nextState, 'fast_tracked', intent.topic)
-      }
-    } catch {
-      setQuestionState('error')
-      setError('This domain could not be opened. Try again in a moment.')
-    }
+    void startFromPrompt(domainSlug)
   }
 
   async function saveState(
     nextState: GateState,
     resolution: SessionResolution = 'in_progress',
+    title?: string,
   ) {
     if (sessionId) {
       await updateSessionResolution(sessionId, resolution, nextState)
       return
     }
 
-    await persistGuestState(nextState.domainSlug, nextState, resolution, intent.topic)
+    await persistGuestState(nextState.domainSlug, nextState, resolution, title ?? intent.topic)
   }
 
   async function fastTrackGate() {
@@ -518,11 +539,7 @@ export function GateWizard({
   function startFresh() {
     resetDomain()
     if (initialPrompt) {
-      if (domains.includes(intent.domain)) {
-        void selectDomain(intent.domain)
-      } else {
-        selectPromptDomain()
-      }
+      void startFromPrompt()
     }
   }
 
@@ -610,7 +627,7 @@ export function GateWizard({
                 type="button"
                 variant="default"
                 className="h-auto min-h-16 justify-between whitespace-normal px-4 py-3 text-left sm:col-span-2"
-                onClick={selectPromptDomain}
+                onClick={() => void startFromPrompt()}
               >
                 <span>
                   <span className="block font-medium">Use {formatDomainSlug(intent.domain)}</span>

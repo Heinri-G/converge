@@ -41,6 +41,7 @@ export interface MatrixRow {
   consCount: number
   defectsCount: number
   compositeScore: number | null
+  specs: Record<string, string | number | boolean | null>
 }
 
 export interface RankedOption {
@@ -161,6 +162,29 @@ export interface GeneratedGate {
   groups: GeneratedGateGroup[]
 }
 
+export interface DomainCatalog {
+  id: string
+  domainSlug: string
+  status: 'draft' | 'curated'
+  source: 'authored' | 'generated'
+}
+
+export interface DomainAttribute {
+  id: string
+  slug: string
+  label: string
+  prompt: string
+  tooltip: string
+  answerType: 'single' | 'boolean'
+  options: GateOption[]
+  keywords: string[]
+  priority: number
+  ordering: number
+  target: GateTarget
+}
+
+export const CORE_CATALOG_SLUG = '__core__'
+
 export type ResearchTier = 'broad' | Tier
 
 export interface GeoPoint {
@@ -182,6 +206,13 @@ export interface ScrapeRequest {
   radiusMinutes?: number
   tier: ResearchTier
   maxResults: number
+  specAttributes?: SpecAttribute[]
+}
+
+export interface SpecAttribute {
+  slug: string
+  label: string
+  valueType: 'number' | 'string' | 'boolean'
 }
 
 export interface CandidateGeo extends GeoPoint {

@@ -270,4 +270,84 @@ describe('scrape-and-analyze pipeline', () => {
     expect(result.candidates.map((candidate) => candidate.name)).toEqual(['Affordable'])
     expect(result.candidates[0]?.objectiveScore).not.toBeNull()
   })
+
+  it('rejects malformed specAttributes', () => {
+    expect(() =>
+      validateRequestBody({
+        query: 'tent',
+        domainSlug: 'tents',
+        intent: {
+          topic: 'tent',
+          domain: 'tents',
+          objective: 'best_overall',
+          hardConstraints: {},
+          preferences: {},
+        },
+        tier: 'broad',
+        maxResults: 10,
+        specAttributes: [{ slug: 'occupancy', label: 'Occupancy', valueType: 'gross' }],
+      }),
+    ).toThrow('spec_attributes_invalid')
+  })
+
+  it('extracts domain specs into candidate data and degrades per candidate', async () => {
+    const specRequest = validateRequestBody({
+      query: 'tent',
+      domainSlug: 'tents',
+      intent: {
+        topic: 'tent',
+        domain: 'tents',
+        objective: 'best_overall',
+        hardConstraints: {},
+        preferences: {},
+      },
+      tier: 'broad',
+      maxResults: 10,
+      specAttributes: [
+        { slug: 'occupancy', label: 'Occupancy', valueType: 'string' },
+        { slug: 'blackout', label: 'Blackout', valueType: 'boolean' },
+      ],
+    })
+
+    const dependencies: PipelineDependencies = {
+      geo: {
+        async resolve() {
+          return { lat: 0, lng: 0 }
+        },
+        async driveMinutes() {
+          return 0
+        },
+      },
+      sources: [
+        {
+          id: 'fake',
+          async fetch() {
+            return [
+              { sourceUrl: 'https://example.com/with-spec', name: 'With spec' },
+              { sourceUrl: 'https://example.com/no-spec', name: 'No spec' },
+            ]
+          },
+        },
+      ],
+      sentiment: {
+        async analyze() {
+          return { sentimentScore: 0, pros: [], cons: [], defects: [], summary: 'Neutral' }
+        },
+      },
+      specs: {
+        async extract(listing) {
+          if (listing.sourceUrl.endsWith('no-spec')) throw new Error('extract failed')
+          return { occupancy: '4', blackout: true }
+        },
+      },
+      model: 'fake-model',
+    }
+
+    const result = await runPipeline(specRequest, dependencies)
+    const withSpec = result.candidates.find((candidate) => candidate.name === 'With spec')
+    const noSpec = result.candidates.find((candidate) => candidate.name === 'No spec')
+
+    expect(withSpec?.data.specs).toEqual({ occupancy: '4', blackout: true })
+    expect(noSpec?.data.specs).toBeUndefined()
+  })
 })

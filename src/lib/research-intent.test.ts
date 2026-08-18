@@ -1,5 +1,118 @@
 import { describe, expect, it } from 'vitest'
-import { buildSearchQuery, deriveResearchIntent } from './research-intent'
+import {
+  answeredAttributeValues,
+  buildSearchQuery,
+  deriveResearchIntent,
+  detectAnsweredAttributeSlugs,
+  specAttributesFromPreferences,
+} from './research-intent'
+import type { DomainAttribute } from './types'
+
+const TENT_ATTRIBUTES: DomainAttribute[] = [
+  {
+    id: 'a1',
+    slug: 'occupancy',
+    label: 'Occupancy',
+    prompt: 'How many people should it sleep?',
+    tooltip: 'Occupancy drives floor area and weight.',
+    answerType: 'single',
+    options: [],
+    keywords: ['person', 'people', 'sleeper', 'berth', 'man tent', '2 person', '4 person'],
+    priority: 1,
+    ordering: 0,
+    target: { kind: 'preference', field: 'occupancy', valueType: 'string' },
+  },
+  {
+    id: 'a2',
+    slug: 'waterproofing',
+    label: 'Waterproofing',
+    prompt: 'Does it need to keep you dry in heavy rain?',
+    tooltip: 'Hydrostatic-head rating is the honest number.',
+    answerType: 'single',
+    options: [],
+    keywords: ['waterproof', 'water resistant', 'hh', 'hydrostatic', 'weatherproof'],
+    priority: 2,
+    ordering: 1,
+    target: { kind: 'preference', field: 'waterproofing', valueType: 'string' },
+  },
+  {
+    id: 'a3',
+    slug: 'blackout',
+    label: 'Blackout',
+    prompt: 'Does morning light bother you?',
+    tooltip: 'Blackout fabric blocks early light.',
+    answerType: 'boolean',
+    options: [],
+    keywords: ['blackout', 'dark'],
+    priority: 4,
+    ordering: 3,
+    target: { kind: 'preference', field: 'blackout', valueType: 'boolean' },
+  },
+  {
+    id: 'a4',
+    slug: 'packability',
+    label: 'Packability',
+    prompt: 'How much packed size are you OK with?',
+    tooltip: 'Packed volume decides hiking vs car camping.',
+    answerType: 'single',
+    options: [],
+    keywords: ['lightweight', 'packable', 'backpack'],
+    priority: 5,
+    ordering: 4,
+    target: { kind: 'preference', field: 'packability', valueType: 'string' },
+  },
+]
+
+describe('attribute detection', () => {
+  it('detects attributes already stated in the prompt', () => {
+    const slugs = detectAnsweredAttributeSlugs('best 4 person waterproof tent', TENT_ATTRIBUTES)
+
+    expect(slugs.has('occupancy')).toBe(true)
+    expect(slugs.has('waterproofing')).toBe(true)
+    expect(slugs.has('blackout')).toBe(false)
+  })
+
+  it('does not false-positive on substring matches', () => {
+    const slugs = detectAnsweredAttributeSlugs('a tent for personal use', TENT_ATTRIBUTES)
+
+    expect(slugs.has('occupancy')).toBe(false)
+  })
+
+  it('extracts values with numeric captures for sized attributes', () => {
+    const values = answeredAttributeValues('best 4 person waterproof tent', TENT_ATTRIBUTES)
+
+    expect(values.occupancy).toBe('4 person')
+    expect(values.waterproofing).toBe('waterproof')
+  })
+
+  it('resolves boolean attributes to true when mentioned', () => {
+    const values = answeredAttributeValues('a blackout tent', TENT_ATTRIBUTES)
+
+    expect(values.blackout).toBe(true)
+  })
+
+  it('returns an empty set when nothing is stated', () => {
+    const slugs = detectAnsweredAttributeSlugs('recommend a good tent', TENT_ATTRIBUTES)
+
+    expect(slugs.size).toBe(0)
+  })
+
+  it('derives the spec-extraction schema from settled preferences', () => {
+    const specs = specAttributesFromPreferences({
+      context: 'product',
+      locallyOrderable: true,
+      shippingCountry: 'NL',
+      budgetFocused: false,
+      occupancy: '4 person',
+      blackout: true,
+    })
+
+    expect(specs).toEqual([
+      { slug: 'occupancy', label: 'occupancy', valueType: 'string' },
+      { slug: 'blackout', label: 'blackout', valueType: 'boolean' },
+    ])
+  })
+})
 
 describe('research intent parsing', () => {
   it('keeps a drive-time constraint separate from price', () => {
