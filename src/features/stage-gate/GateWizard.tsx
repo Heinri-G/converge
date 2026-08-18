@@ -141,7 +141,7 @@ export function GateWizard({
       } else {
         setCatalogState('error')
         setError(
-          'The domain catalog could not be reached. Check the database migration, then try again.',
+          'The categories could not be loaded. Check your connection and try again.',
         )
       }
     }
@@ -408,7 +408,7 @@ export function GateWizard({
         } else {
           setCatalogState('error')
           setError(
-            'The domain catalog could not be reached. Check the database migration, then try again.',
+            'The categories could not be loaded. Check your connection and try again.',
           )
         }
       })
@@ -569,23 +569,38 @@ export function GateWizard({
       ? generatedGate.groups[groupIndex]
       : null
 
+  const showHero = !(complete && gateState && mergedIntent)
+  const heroKicker = generationState === 'loading'
+    ? 'Preparing your questions'
+    : sessionId
+      ? 'Refining your research'
+      : selectedDomain
+        ? formatDomainSlug(selectedDomain)
+        : 'A few quick questions'
+  const heroTitle =
+    generationState === 'loading'
+      ? 'Reading your request to find what matters most.'
+      : selectedDomain
+        ? 'A few questions, then your shortlist.'
+        : 'Answer a couple of quick questions — get a focused shortlist.'
+
   return (
     <section className="mx-auto flex min-h-full w-full max-w-3xl flex-col gap-6 pb-8">
-      <header className="space-y-3">
-        <p className="font-mono text-[11px] tracking-[0.22em] text-muted-foreground uppercase">
-          {sessionId ? 'Refining your research' : 'A few quick questions'}
-        </p>
-        <h1 className="max-w-xl text-[1.7rem] leading-tight font-semibold tracking-tight text-balance">
-          {generationState === 'loading'
-            ? 'Preparing your questions…'
-            : 'Answer a couple of quick questions — get a focused shortlist.'}
-        </h1>
-        <p className="max-w-2xl text-[15px] leading-6 text-muted-foreground">
-          {generationState === 'loading'
-            ? 'Reading your request to find what matters most.'
-            : 'Each question targets what changes the outcome most. No rabbit holes.'}
-        </p>
-      </header>
+      {showHero && (
+        <header className="space-y-3">
+          <p className="font-mono text-[11px] tracking-[0.22em] text-muted-foreground uppercase">
+            {heroKicker}
+          </p>
+          <h1 className="max-w-xl text-[1.7rem] leading-tight font-semibold tracking-tight text-balance">
+            {heroTitle}
+          </h1>
+          <p className="max-w-prose text-[15px] leading-6 text-muted-foreground">
+            {generationState === 'loading'
+              ? 'Finding what changes the outcome most.'
+              : 'Each question targets what changes the outcome most. No rabbit holes.'}
+          </p>
+        </header>
+      )}
 
       {catalogState === 'loading' && (
         <div className="space-y-3" aria-label="Loading domains">
@@ -654,7 +669,7 @@ export function GateWizard({
                     Open {formatDomainSlug(domain)}
                   </span>
                 </span>
-                <span aria-hidden="true" className="font-mono text-xs text-primary">
+                <span aria-hidden="true" className="font-mono text-xs text-muted-foreground">
                   →
                 </span>
               </Button>

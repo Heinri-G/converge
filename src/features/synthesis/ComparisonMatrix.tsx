@@ -45,7 +45,7 @@ function RowLine({
 }) {
   return (
     <div className="flex items-baseline justify-between gap-4 text-sm">
-      <span className="font-mono text-[10px] tracking-[0.14em] text-muted-foreground uppercase">
+      <span className="font-mono text-[11px] tracking-[0.14em] text-muted-foreground uppercase">
         {label}
       </span>
       <span className={cn('text-right font-mono text-xs', className)}>{value}</span>
@@ -123,7 +123,7 @@ export function ComparisonMatrix({ rows }: { rows: MatrixRow[] }) {
       <div className="hidden overflow-x-auto md:block">
         <table className="w-full border-collapse text-left text-sm">
           <thead>
-            <tr className="border-b border-border font-mono text-[10px] tracking-[0.14em] text-muted-foreground uppercase">
+            <tr className="border-b border-border font-mono text-[11px] tracking-[0.14em] text-muted-foreground uppercase">
               <th scope="col" className="py-2 pr-4 font-medium">
                 Option
               </th>

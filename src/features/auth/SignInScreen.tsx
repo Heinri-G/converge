@@ -257,7 +257,7 @@ export default function SignInScreen() {
     <section className="flex min-h-full flex-col">
       <div className="flex flex-1 items-end justify-center lg:items-center">
         <Card className="w-full max-w-md rounded-t-2xl rounded-b-none border-b-0 p-6 lg:rounded-2xl lg:border-b">
-          <p className="font-mono text-[11px] font-medium tracking-[0.22em] text-gold uppercase">
+          <p className="font-mono text-[11px] font-medium tracking-[0.22em] text-gold-text uppercase">
             Account
           </p>
           <h1 className="mt-2.5 text-2xl leading-tight font-semibold tracking-tight">
@@ -277,7 +277,7 @@ export default function SignInScreen() {
 
           {view === 'password' && (
             <>
-              <div className="mt-6 grid grid-cols-2 border-b border-border" role="tablist" aria-label="Account access">
+              <div className="mt-6 grid grid-cols-2 border-b border-border pb-2" role="tablist" aria-label="Account access">
                 {(['signin', 'signup'] as const).map((mode) => (
                   <button
                     key={mode}

@@ -15,6 +15,7 @@ interface RunResearchOptions {
   input: ScrapeRequest
   sessionId?: string
   onPhase?: (phase: ResearchPhase) => void
+  signal?: AbortSignal
 }
 
 function analysisForGuest(result: ScrapeResponse): unknown[] {
@@ -62,9 +63,9 @@ async function persistGuestResults(result: ScrapeResponse, tier: ResearchTier, o
   })
 }
 
-export async function runResearch({ input, sessionId, onPhase }: RunResearchOptions) {
+export async function runResearch({ input, sessionId, onPhase, signal }: RunResearchOptions) {
   onPhase?.('geocoding')
-  const result = await runScrapeAndAnalyze(input)
+  const result = await runScrapeAndAnalyze(input, signal)
 
   onPhase?.('filtering')
   if (sessionId) await persistRemoteResults(sessionId, result, input.intent.objective)

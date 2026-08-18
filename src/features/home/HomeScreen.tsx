@@ -44,13 +44,13 @@ export default function HomeScreen() {
   return (
     <div className="flex flex-col gap-7">
       <div>
-        <p className="font-mono text-[11px] font-medium tracking-[0.22em] text-gold uppercase">
+        <p className="font-mono text-[11px] font-medium tracking-[0.22em] text-gold-text uppercase">
           Start a research
         </p>
         <h1 className="mt-2.5 text-[1.7rem] leading-tight font-semibold tracking-tight text-balance">
           Research, without the rabbit hole.
         </h1>
-        <p className="mt-2 text-[15px] text-muted-foreground">
+        <p className="mt-2 max-w-[34rem] text-[15px] text-muted-foreground">
           Describe what you're choosing — get a shortlist worth deciding on.
         </p>
       </div>
@@ -63,22 +63,9 @@ export default function HomeScreen() {
           value={prompt}
           onChange={(event) => setPrompt(event.target.value)}
         />
-        <div className="flex gap-3">
-          <Button type="submit" size="lg" className="flex-1">
-            Start research
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            className="text-muted-foreground"
-            onClick={() => {
-              if (prompt.trim())
-                navigate(`/research?prompt=${encodeURIComponent(prompt.trim())}&fastTrack=1`)
-            }}
-          >
-            Skip the questions
-          </Button>
-        </div>
+        <Button type="submit" size="lg" className="min-h-12 w-full">
+          Start research
+        </Button>
       </form>
 
       <Button asChild variant="outline" className="min-h-11 w-full">
@@ -87,13 +74,18 @@ export default function HomeScreen() {
 
       <div>
         <div className="flex items-center gap-2.5">
-          <span className="font-mono text-[10px] font-medium tracking-[0.18em] text-muted-foreground uppercase">
+          <span className="font-mono text-[11px] font-medium tracking-[0.18em] text-muted-foreground uppercase">
             Reading the marks
           </span>
           <span aria-hidden="true" className="h-px flex-1 bg-border" />
         </div>
         <p className="mt-2 text-xs text-muted-foreground">
-          ∧ strengths · ∨ risks · × avoid
+          <span aria-hidden="true">∧</span>
+          <span className="sr-only">strengths ·</span> strengths ·{' '}
+          <span aria-hidden="true">∨</span>
+          <span className="sr-only">risks ·</span> risks ·{' '}
+          <span aria-hidden="true">×</span>
+          <span className="sr-only">avoid</span> avoid
         </p>
 
         <ul className="mt-3 flex flex-col gap-2.5">
@@ -119,7 +111,14 @@ export default function HomeScreen() {
                     creaseStyles[item.crease],
                   )}
                 >
-                  {creaseGlyph[item.crease]}
+                  <span aria-hidden="true">{creaseGlyph[item.crease]}</span>
+                  <span className="sr-only">
+                    {item.crease === 'solid'
+                      ? 'strength'
+                      : item.crease === 'fold'
+                        ? 'risk'
+                        : 'avoid'}
+                  </span>
                 </span>
               </Card>
             </li>

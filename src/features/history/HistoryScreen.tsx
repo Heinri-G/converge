@@ -15,10 +15,10 @@ function formatDomain(slug: string): string {
     .join(' ')
 }
 
-function resolutionLabel(resolution: SessionResolution): string {
+function resolutionLabel(resolution: SessionResolution, hasReport?: boolean): string {
   switch (resolution) {
     case 'complete':
-      return 'Complete'
+      return hasReport ? 'Report ready' : 'Questions done'
     case 'fast_tracked':
       return 'Quick results'
     default:
@@ -31,7 +31,7 @@ function resolutionStyles(resolution: SessionResolution): string {
     case 'complete':
       return 'border-mountain/40 bg-mountain/10 text-mountain'
     case 'fast_tracked':
-      return 'border-gold/40 bg-gold/10 text-gold'
+      return 'border-gold/40 bg-gold/10 text-gold-text'
     default:
       return 'border-border text-muted-foreground'
   }
@@ -89,13 +89,13 @@ export default function HistoryScreen() {
   return (
     <section className="mx-auto flex min-h-full w-full max-w-3xl flex-col gap-6 pb-8">
       <header className="space-y-3">
-        <p className="font-mono text-[11px] tracking-[0.22em] text-primary uppercase">
+        <p className="font-mono text-[11px] tracking-[0.22em] text-gold-text uppercase">
           Your research
         </p>
         <h1 className="max-w-xl text-[1.7rem] leading-tight font-semibold tracking-tight text-balance">
           History, reopened — never re-researched.
         </h1>
-        <p className="max-w-2xl text-[15px] leading-6 text-muted-foreground">
+        <p className="max-w-prose text-[15px] leading-6 text-muted-foreground">
           Finished reports and in-progress research live here. Open one to re-read it, refine it
           without re-answering, or run it again with the same answers.
         </p>
@@ -109,7 +109,10 @@ export default function HistoryScreen() {
               <p className="mt-1 text-sm leading-5 text-muted-foreground">
                 {formatDomain(guest.session.domain_slug)} ·{' '}
                 <span className={resolutionStyles(guest.session.resolution)}>
-                  {resolutionLabel(guest.session.resolution)}
+                  {resolutionLabel(
+                    guest.session.resolution,
+                    (guest.candidates ?? []).length > 0,
+                  )}
                 </span>
               </p>
             </div>
@@ -203,7 +206,7 @@ export default function HistoryScreen() {
                     </p>
                   </div>
                   <span
-                    className={`shrink-0 rounded-sm border px-2 py-1 font-mono text-[10px] tracking-[0.12em] uppercase ${resolutionStyles(session.resolution)}`}
+                    className={`shrink-0 rounded-sm border px-2 py-1 font-mono text-[11px] tracking-[0.12em] uppercase ${resolutionStyles(session.resolution)}`}
                   >
                     {resolutionLabel(session.resolution)}
                   </span>

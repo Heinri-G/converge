@@ -110,16 +110,17 @@ function GroupContent({
   answers,
   onAnswer,
 }: Omit<GroupSheetProps, 'mobileOpen' | 'onMobileOpenChange' | 'onContinue' | 'onFastTrack' | 'onStartFresh'>) {
+  const answeredInGroup = group.questions.filter(
+    (question) => answers[question.id] !== undefined,
+  ).length
+  const progressValue = (answeredInGroup / Math.max(1, group.questions.length)) * 100
   return (
     <>
       <Progress
         label={`Step ${groupIndex + 1} of ${totalGroups}`}
-        value={(groupIndex / Math.max(1, totalGroups)) * 100}
+        value={progressValue}
       />
       <div className="space-y-2">
-        <p className="font-mono text-[10px] tracking-[0.18em] text-muted-foreground uppercase">
-          {group.title}
-        </p>
         <h2 className="max-w-[34rem] text-xl leading-tight font-semibold tracking-tight text-balance">
           {group.rationale}
         </h2>
@@ -190,9 +191,9 @@ export function GroupSheet({
   return (
     <>
       <div className="hidden md:block">
-        <Card className="gap-6 border border-border py-5 shadow-none">
+        <Card className="gap-6 border border-border border-t-2 border-t-primary py-5 shadow-none">
           <CardHeader className="gap-2 px-5">
-            <CardTitle className="text-base">A few quick questions</CardTitle>
+            <CardTitle className="text-base">{group.title}</CardTitle>
             <CardDescription>
               Prepared from your request — only what's still missing.
             </CardDescription>
@@ -229,14 +230,14 @@ export function GroupSheet({
             </div>
           )}
           <Sheet open={mobileOpen} onOpenChange={onMobileOpenChange}>
-            <SheetContent
-              side="bottom"
-              showCloseButton
-              overlayClassName="md:hidden"
-              className="max-h-[calc(100dvh-4.5rem)] flex-col gap-0 overflow-hidden rounded-t-xl border-border bg-card px-0 pt-0 pb-0 md:hidden"
-            >
+          <SheetContent
+            side="bottom"
+            showCloseButton
+            overlayClassName="md:hidden"
+            className="max-h-[calc(100dvh-4.5rem)] flex-col gap-0 overflow-hidden rounded-t-xl border-x-0 border-b-0 border-t-2 border-t-primary bg-card px-0 pt-0 pb-0 md:hidden"
+          >
               <SheetHeader className="shrink-0 gap-1 px-4 pt-5 pr-12 pb-4">
-                <SheetTitle>A few quick questions</SheetTitle>
+                <SheetTitle>{group.title}</SheetTitle>
                 <SheetDescription>Prepared from your request — only what's still missing.</SheetDescription>
               </SheetHeader>
               <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-4 pb-6">

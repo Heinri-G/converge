@@ -66,6 +66,8 @@ export default defineConfig(({ mode }) => ({
       manifest: {
         name: 'Converge',
         short_name: 'Converge',
+        description: 'Research, without the rabbit hole.',
+        lang: 'en',
         display: 'standalone',
         start_url: '/',
         theme_color: '#fbfaf6',

@@ -93,6 +93,7 @@ export default function ReportScreen() {
   const [shareOpen, setShareOpen] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [gatesDone, setGatesDone] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -104,6 +105,7 @@ export default function ReportScreen() {
         if (!loaded) {
           setReport(null)
           setReportId(null)
+          setGatesDone(await gatesFinished(sessionId))
           setLoadState('ready')
           return
         }
@@ -136,15 +138,16 @@ export default function ReportScreen() {
   return (
     <section className="mx-auto flex min-h-full w-full max-w-3xl flex-col gap-6 pb-8">
       <header className="space-y-3">
-        <p className="font-mono text-[11px] tracking-[0.22em] text-primary uppercase">
+        <p className="font-mono text-[11px] tracking-[0.22em] text-gold-text uppercase">
           Decision report
         </p>
         <h1 className="max-w-xl text-[1.7rem] leading-tight font-semibold tracking-tight text-balance">
-          {report ? report.title : 'Your report is ready.'}
+          {report ? report.title : 'No report yet.'}
         </h1>
-        <p className="max-w-2xl text-[15px] leading-6 text-muted-foreground">
-          The shortlist, ranked, with the red flags called out. Generated deterministically from
-          the same candidates and analysis every time.
+        <p className="max-w-prose text-[15px] leading-6 text-muted-foreground">
+          {report
+            ? 'The shortlist, ranked, with the red flags called out. Generated deterministically from the same candidates and analysis every time.'
+            : 'Run a research first — the comparison matrix, Top 3, and options to avoid land here.'}
         </p>
       </header>
 
@@ -167,14 +170,38 @@ export default function ReportScreen() {
         </Card>
       )}
 
-      {loadState === 'ready' && !report && (
+      {loadState === 'ready' && !report && gatesDone && (
         <Card className="border border-border py-0 shadow-none">
           <CardContent className="space-y-4 px-5 py-5">
             <div>
-              <h2 className="text-base font-semibold">No report here yet.</h2>
+              <h2 className="text-base font-semibold">Your search didn't finish.</h2>
               <p className="mt-1 text-sm leading-5 text-muted-foreground">
-                Run a research first, then this screen shows the comparison matrix, Top 3, and the
-                options to avoid.
+                Your questions were answered, but no options came back — the search may have
+                failed or timed out. Run it again, or start a fresh research.
+              </p>
+            </div>
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <Button asChild className="min-h-11">
+                <Link to={sessionId ? `/research?session=${sessionId}` : '/research'}>
+                  Try the search again
+                </Link>
+              </Button>
+              <Button asChild variant="outline" className="min-h-11">
+                <Link to="/research">Start a fresh research</Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {loadState === 'ready' && !report && !gatesDone && (
+        <Card className="border border-border py-0 shadow-none">
+          <CardContent className="space-y-4 px-5 py-5">
+            <div>
+              <h2 className="text-base font-semibold">No research here yet.</h2>
+              <p className="mt-1 text-sm leading-5 text-muted-foreground">
+                Run a research first — this screen then shows the comparison matrix, Top 3, and
+                the options to avoid.
               </p>
             </div>
             <Button asChild className="min-h-11">
@@ -197,7 +224,7 @@ export default function ReportScreen() {
 
           <section className="space-y-3">
             <div>
-              <p className="font-mono text-[10px] tracking-[0.18em] text-muted-foreground uppercase">
+              <p className="font-mono text-[11px] tracking-[0.18em] text-muted-foreground uppercase">
                 Top 3 recommended options
               </p>
               <h2 className="mt-1 text-lg font-semibold">The strongest three.</h2>
@@ -207,17 +234,21 @@ export default function ReportScreen() {
 
           <section className="space-y-3">
             <div>
-              <p className="font-mono text-[10px] tracking-[0.18em] text-muted-foreground uppercase">
+              <p className="font-mono text-[11px] tracking-[0.18em] text-muted-foreground uppercase">
                 Comparison matrix
               </p>
-              <h2 className="mt-1 text-lg font-semibold">The whole shortlist, side by side.</h2>
+              <h2 className="mt-1 text-lg font-semibold">The whole shortlist, compared.</h2>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                Composite score: rating, sentiment, and your constraints weighted into one 0–1
+                score.
+              </p>
             </div>
             <ComparisonMatrix rows={report.matrix} />
           </section>
 
           <section className="space-y-3">
             <div>
-              <p className="font-mono text-[10px] tracking-[0.18em] text-avoid uppercase">
+              <p className="font-mono text-[11px] tracking-[0.18em] text-avoid uppercase">
                 Options to avoid
               </p>
               <h2 className="mt-1 text-lg font-semibold">Anti-Picks, with reasons.</h2>
@@ -315,4 +346,16 @@ async function loadSignedInReport(sessionId: string): Promise<LoadedReport | nul
   )
   const savedReport = await saveReport(sessionId, report)
   return { report, reportId: savedReport.id, saved: true }
+}
+
+async function gatesFinished(sessionId: string | undefined): Promise<boolean> {
+  if (sessionId) {
+    const session = await loadResearchSession(sessionId)
+    return session.resolution === 'complete' || session.resolution === 'fast_tracked'
+  }
+
+  const guest = await readGuestSession()
+  return (
+    guest?.session.resolution === 'complete' || guest?.session.resolution === 'fast_tracked'
+  )
 }

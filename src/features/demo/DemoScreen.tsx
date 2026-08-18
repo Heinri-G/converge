@@ -28,24 +28,24 @@ export default function DemoScreen() {
     <section className="mx-auto flex min-h-full w-full max-w-3xl flex-col gap-6 pb-[calc(var(--safe-bottom)+5rem)]">
       <header className="space-y-3">
         <div className="flex items-center justify-between gap-4">
-          <p className="font-mono text-[11px] tracking-[0.22em] text-primary uppercase">
+          <p className="font-mono text-[11px] tracking-[0.22em] text-gold-text uppercase">
             Completed example
           </p>
-          <span className="rounded-sm border border-border px-2 py-1 font-mono text-[10px] tracking-[0.12em] text-muted-foreground uppercase">
+          <span className="rounded-sm border border-border px-2 py-1 font-mono text-[11px] tracking-[0.12em] text-muted-foreground uppercase">
             Demo data
           </span>
         </div>
         <h1 className="max-w-xl text-[1.7rem] leading-tight font-semibold tracking-tight text-balance">
           One coffee decision, end to end.
         </h1>
-        <p className="max-w-2xl text-[15px] leading-6 text-muted-foreground">
+        <p className="max-w-prose text-[15px] leading-6 text-muted-foreground">
           Walk through a completed Converge run. Everything here is synthetic fixture data; no
           account, location, or provider call is used.
         </p>
       </header>
 
       <div className="space-y-2" aria-label="Demo progress">
-        <div className="flex items-center justify-between gap-4 font-mono text-[10px] tracking-[0.18em] text-muted-foreground uppercase">
+        <div className="flex items-center justify-between gap-4 font-mono text-[11px] tracking-[0.18em] text-muted-foreground uppercase">
           <span>{step.label}</span>
           <span>
             {stepIndex + 1} / {DEMO_STEPS.length}
@@ -92,7 +92,7 @@ export default function DemoScreen() {
           Back
         </Button>
         {isLast ? (
-          <Button asChild variant="outline" className="min-h-11">
+          <Button asChild className="min-h-11">
             <Link to="/research">Start your own</Link>
           </Button>
         ) : (
@@ -114,14 +114,14 @@ function DemoMapStep() {
   return (
     <div className="space-y-4">
       <div className="rounded-lg border border-border bg-muted/30 p-4">
-        <p className="font-mono text-[10px] tracking-[0.18em] text-muted-foreground uppercase">
+        <p className="font-mono text-[11px] tracking-[0.18em] text-muted-foreground uppercase">
           Starting point
         </p>
         <p className="mt-2 text-base font-medium">Coffee and espresso at home</p>
         <p className="mt-1 text-sm text-muted-foreground">Synthetic topic · no location attached</p>
       </div>
       <div className="space-y-2">
-        <p className="font-mono text-[10px] tracking-[0.18em] text-muted-foreground uppercase">
+        <p className="font-mono text-[11px] tracking-[0.18em] text-muted-foreground uppercase">
           Answer
         </p>
         <div className="flex min-h-11 items-center gap-3 rounded-lg border border-primary bg-primary/10 px-4 text-sm font-medium">
@@ -130,7 +130,7 @@ function DemoMapStep() {
         </div>
       </div>
       <div className="space-y-2">
-        <p className="font-mono text-[10px] tracking-[0.18em] text-muted-foreground uppercase">
+        <p className="font-mono text-[11px] tracking-[0.18em] text-muted-foreground uppercase">
           Your focus
         </p>
         <div className="flex min-h-11 items-center gap-3 rounded-lg border border-primary bg-primary/10 px-4 text-sm font-medium">
@@ -200,7 +200,7 @@ function DemoSentimentStep() {
   return (
     <div className="space-y-5">
       <div>
-        <p className="font-mono text-[10px] tracking-[0.18em] text-avoid uppercase">
+        <p className="font-mono text-[11px] tracking-[0.18em] text-avoid uppercase">
           Options to avoid
         </p>
         <h2 className="mt-2 text-lg font-semibold">{candidate.name}</h2>
@@ -218,7 +218,7 @@ function DemoSentimentStep() {
           </ul>
         </div>
       </div>
-      <p className="font-mono text-[10px] tracking-[0.12em] text-muted-foreground uppercase">
+      <p className="font-mono text-[11px] tracking-[0.12em] text-muted-foreground uppercase">
         Demo data · no live provider call
       </p>
     </div>

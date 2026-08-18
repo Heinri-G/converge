@@ -8,7 +8,7 @@ export function Progress({ value, label }: ProgressProps) {
 
   return (
     <div className="space-y-2" aria-label={label}>
-      <div className="flex items-center justify-between gap-4 font-mono text-[10px] tracking-[0.18em] text-muted-foreground uppercase">
+      <div className="flex items-center justify-between gap-4 font-mono text-[11px] tracking-[0.18em] text-muted-foreground uppercase">
         <span>{label}</span>
         <span>{Math.round(boundedValue)}%</span>
       </div>

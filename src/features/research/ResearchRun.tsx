@@ -93,6 +93,7 @@ export function ResearchRun({ domainSlug, tier, intent, sessionId }: ResearchRun
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<ScrapeResponse | null>(null)
   const runId = useRef(0)
+  const abortRef = useRef<AbortController | null>(null)
 
   const budgetConstraint = useMemo(
     () => parseBudget(budgetInput, intent.hardConstraints.currency),
@@ -116,6 +117,8 @@ export function ResearchRun({ domainSlug, tier, intent, sessionId }: ResearchRun
     setError(null)
     setResult(null)
     setPhase('geocoding')
+    abortRef.current?.abort()
+    abortRef.current = new AbortController()
 
     const query = buildSearchQuery(intent.topic, domainSlug, objective, {
       context,
@@ -150,6 +153,7 @@ export function ResearchRun({ domainSlug, tier, intent, sessionId }: ResearchRun
         onPhase: (nextPhase) => {
           if (currentRun === runId.current) setPhase(nextPhase)
         },
+        signal: abortRef.current?.signal,
       }
       if (sessionId) runOptions.sessionId = sessionId
       const nextResult = await runResearch(runOptions)
@@ -164,6 +168,7 @@ export function ResearchRun({ domainSlug, tier, intent, sessionId }: ResearchRun
   }
 
   function cancel() {
+    abortRef.current?.abort()
     runId.current += 1
     setPhase('cancelled')
   }
@@ -185,7 +190,7 @@ export function ResearchRun({ domainSlug, tier, intent, sessionId }: ResearchRun
       {!phase || phase === 'cancelled' || phase === 'error' || phase === 'complete' ? (
         <Card className="border border-border py-0 shadow-none">
           <CardHeader className="gap-2 px-5 py-5">
-            <p className="font-mono text-[10px] tracking-[0.18em] text-primary uppercase">
+            <p className="font-mono text-[11px] tracking-[0.18em] text-gold-text uppercase">
               Your search
             </p>
             <CardTitle className="text-xl leading-tight">Ready to search.</CardTitle>
@@ -235,7 +240,9 @@ export function ResearchRun({ domainSlug, tier, intent, sessionId }: ResearchRun
           <CardContent className="px-5 pb-5">
             <form className="space-y-4" onSubmit={(event) => void submit(event)}>
               <div className="space-y-2">
-                <span className="text-sm font-medium">Objective</span>
+                <label htmlFor="research-objective" className="text-sm font-medium">
+                  Objective
+                </label>
                 {editingObjective ? (
                   <div className="space-y-2">
                     <select
@@ -366,13 +373,14 @@ export function ResearchRun({ domainSlug, tier, intent, sessionId }: ResearchRun
           onCancel={cancel}
           context={context}
           hasRequirements={hasRequirements}
+          topic={intent.topic}
         />
       )}
 
       {phase === 'complete' && result && (
         <Card className="border border-border py-0 shadow-none">
           <CardHeader className="gap-2 px-5 py-5">
-            <p className="font-mono text-[10px] tracking-[0.18em] text-primary uppercase">
+            <p className="font-mono text-[11px] tracking-[0.18em] text-gold-text uppercase">
               Results
             </p>
             <CardTitle className="text-xl leading-tight">

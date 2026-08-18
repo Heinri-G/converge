@@ -21,7 +21,7 @@ export function createCatalogGate(
     groups: [
       {
         id: 'catalog-questions',
-        title: 'A few quick questions',
+        title: 'Your preferences',
         rationale: 'A couple of decisions that steer which options fit best.',
         questions: unanswered.map((attribute) => ({
           id: `attr-${attribute.slug}`,

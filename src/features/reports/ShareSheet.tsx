@@ -173,7 +173,7 @@ export function ShareSheet({ reportId, open, onOpenChange }: ShareSheetProps) {
       )}
 
       <div className="space-y-2 border-t border-border pt-4">
-        <p className="font-mono text-[10px] tracking-[0.18em] text-muted-foreground uppercase">
+        <p className="font-mono text-[11px] tracking-[0.18em] text-muted-foreground uppercase">
           Active shares
         </p>
         <ShareList shares={shares} onRevoke={(shareId) => void handleRevoke(shareId)} />

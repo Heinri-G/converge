@@ -59,17 +59,17 @@ export default function SharedReportScreen() {
         <>
           <header className="space-y-3">
             <div className="flex items-center justify-between gap-4">
-              <p className="font-mono text-[11px] tracking-[0.22em] text-primary uppercase">
+              <p className="font-mono text-[11px] tracking-[0.22em] text-gold-text uppercase">
                 Shared report
               </p>
-              <span className="rounded-sm border border-border px-2 py-1 font-mono text-[10px] tracking-[0.12em] text-muted-foreground uppercase">
+              <span className="rounded-sm border border-border px-2 py-1 font-mono text-[11px] tracking-[0.12em] text-muted-foreground uppercase">
                 Read only
               </span>
             </div>
             <h1 className="max-w-xl text-[1.7rem] leading-tight font-semibold tracking-tight text-balance">
               {report.title}
             </h1>
-            <p className="max-w-2xl text-[15px] leading-6 text-muted-foreground">
+            <p className="max-w-prose text-[15px] leading-6 text-muted-foreground">
               A decision-ready shortlist shared by the author — the matrix, the Top 3, and the
               options to avoid.
             </p>
@@ -86,7 +86,7 @@ export default function SharedReportScreen() {
 
           <section className="space-y-3">
             <div>
-              <p className="font-mono text-[10px] tracking-[0.18em] text-muted-foreground uppercase">
+              <p className="font-mono text-[11px] tracking-[0.18em] text-muted-foreground uppercase">
                 Top 3 recommended options
               </p>
               <h2 className="mt-1 text-lg font-semibold">The strongest three.</h2>
@@ -96,7 +96,7 @@ export default function SharedReportScreen() {
 
           <section className="space-y-3">
             <div>
-              <p className="font-mono text-[10px] tracking-[0.18em] text-muted-foreground uppercase">
+              <p className="font-mono text-[11px] tracking-[0.18em] text-muted-foreground uppercase">
                 Comparison matrix
               </p>
               <h2 className="mt-1 text-lg font-semibold">The whole shortlist, side by side.</h2>
@@ -106,7 +106,7 @@ export default function SharedReportScreen() {
 
           <section className="space-y-3">
             <div>
-              <p className="font-mono text-[10px] tracking-[0.18em] text-avoid uppercase">
+              <p className="font-mono text-[11px] tracking-[0.18em] text-avoid uppercase">
                 Options to avoid
               </p>
               <h2 className="mt-1 text-lg font-semibold">Anti-Picks, with reasons.</h2>

@@ -14,13 +14,10 @@ export function TopThree({ options }: { options: RankedOption[] }) {
       {options.map((option) => (
         <article
           key={option.candidateId}
-          className="flex gap-4 rounded-lg border border-border bg-card p-4 shadow-seam"
+          className="flex items-start gap-3 rounded-lg border border-border bg-card p-4 shadow-seam"
         >
-          <span
-            aria-hidden="true"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-primary font-mono text-sm font-medium text-primary"
-          >
-            {option.rank}
+          <span className="rounded-sm bg-mountain/10 px-1.5 py-1 font-mono text-[11px] font-medium tracking-[0.12em] text-mountain uppercase">
+            Top-{option.rank}
           </span>
           <div className="min-w-0 flex-1">
             <h3 className="text-base font-semibold">{option.name}</h3>

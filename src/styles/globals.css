@@ -41,6 +41,7 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-gold: var(--primary);
+  --color-gold-text: var(--gold-text);
   --color-mountain: var(--mountain);
   --color-valley: var(--valley);
   --color-avoid: var(--avoid);
@@ -93,6 +94,9 @@
   --primary: #b8892f;
   --primary-foreground: #191a17;
 
+  /* Gold as text: deepened to pass WCAG AA (4.5:1) on paper and white. */
+  --gold-text: #8a6b1b;
+
   --secondary: #f1eee4;
   --secondary-foreground: #1a1a17;
 
@@ -144,6 +148,8 @@
 
   --primary: #d9b054;
   --primary-foreground: #191507;
+
+  --gold-text: #d9b054;
 
   --secondary: #2a2d28;
   --secondary-foreground: #ece8dc;

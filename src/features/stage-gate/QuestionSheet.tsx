@@ -76,7 +76,7 @@ function QuestionContent({
       <Progress label={`Question ${current} of ${maxDepth}`} value={(answered / maxDepth) * 100} />
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-2">
-          <p className="font-mono text-[10px] tracking-[0.18em] text-muted-foreground uppercase">
+          <p className="font-mono text-[11px] tracking-[0.18em] text-muted-foreground uppercase">
             One decision at a time
           </p>
           <h2 className="max-w-[34rem] text-xl leading-tight font-semibold tracking-tight text-balance">
@@ -142,7 +142,7 @@ export function QuestionSheet({
   return (
     <>
       <div className="hidden md:block">
-        <Card className="gap-6 border border-border py-5 shadow-none">
+        <Card className="gap-6 border border-border border-t-2 border-t-primary py-5 shadow-none">
           <CardHeader className="gap-2 px-5">
             <CardTitle className="text-base">A couple of quick questions</CardTitle>
             <CardDescription>
@@ -178,12 +178,12 @@ export function QuestionSheet({
             </div>
           )}
           <Sheet open={mobileOpen} onOpenChange={onMobileOpenChange}>
-            <SheetContent
-              side="bottom"
-              showCloseButton
-              overlayClassName="md:hidden"
-              className="max-h-[calc(100dvh-4.5rem)] flex-col gap-0 overflow-hidden rounded-t-xl border-border bg-card px-0 pt-0 pb-0 md:hidden"
-            >
+          <SheetContent
+            side="bottom"
+            showCloseButton
+            overlayClassName="md:hidden"
+            className="max-h-[calc(100dvh-4.5rem)] flex-col gap-0 overflow-hidden rounded-t-xl border-x-0 border-b-0 border-t-2 border-t-primary bg-card px-0 pt-0 pb-0 md:hidden"
+          >
               <SheetHeader className="shrink-0 gap-1 px-4 pt-5 pr-12 pb-4">
                 <SheetTitle>A couple of quick questions</SheetTitle>
                 <SheetDescription>

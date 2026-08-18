@@ -45,7 +45,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       </main>
 
       <nav
-        aria-label="Primary"
+        aria-label="Main navigation"
         className="flex gap-1 border-t border-border bg-background px-2 pt-1 pb-[calc(var(--safe-bottom)+4px)] lg:hidden"
       >
         {NAV_ITEMS.map((item) => (
@@ -62,7 +62,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       </nav>
 
       <nav
-        aria-label="Primary"
+        aria-label="Primary navigation"
         className="hidden flex-col gap-1 border-r border-border bg-background p-4 pt-[calc(var(--safe-top)+16px)] lg:col-start-1 lg:row-start-1 lg:flex"
       >
         <p className="mb-4 flex items-center gap-2.5 text-lg font-semibold tracking-tight">
